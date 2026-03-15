@@ -28,3 +28,8 @@ body {
 .agent-glow {
   text-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
 }
+
+.scrollbar-small {
+  scrollbar-color: #9b9b9b transparent;
+  scrollbar-width: auto;
+}
