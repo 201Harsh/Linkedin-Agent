@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   BarChart,
 } from "lucide-react";
+import Link from "next/link";
 
 const LandingPage = () => {
   const heroRef = useRef<any>(null);
@@ -143,9 +144,11 @@ const LandingPage = () => {
         </div>
 
         <div ref={addToRefs}>
-          <button className="cursor-pointer flex items-center justify-center gap-2 bg-[#ea580c] hover:bg-[#f97316] text-white px-12 py-4 rounded-2xl font-mono font-medium text-2xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)]">
-            Start Journey <ArrowRight size={20} />
-          </button>
+          <Link href="/register">
+            <button className="cursor-pointer flex items-center justify-center gap-2 bg-[#ea580c] hover:bg-[#f97316] text-white px-12 py-4 rounded-2xl font-mono font-medium text-2xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_30px_rgba(234,88,12,0.5)]">
+              Start Journey <ArrowRight size={20} />
+            </button>
+          </Link>
         </div>
       </main>
 
