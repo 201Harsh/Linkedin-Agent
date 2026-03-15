@@ -48,11 +48,10 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#ea580c] selection:text-white relative overflow-x-hidden">
-      {/* Background Gradients & Grid */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-[#ea580c] rounded-full blur-[250px] opacity-[0.12] pointer-events-none"></div>
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none"></div>
+      {/* Background linears & Grid */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-250 h-150 bg-[#ea580c] rounded-full blur-[250px] opacity-[0.12] pointer-events-none"></div>
+      <div className="fixed inset-0 bg-[linear-linear(rgba(255,255,255,0.02)_1px,transparent_1px),linear-linear(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-size-[64px_64px] pointer-events-none"></div>
 
-      {/* --- UPDATED NAVBAR: Floating Glassmorphism --- */}
       <nav
         ref={headerRef}
         className="fixed top-6 left-1/2 -translate-x-1/2 w-[90%] max-w-5xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-full px-8 py-4 flex justify-between items-center z-50 shadow-[0_4px_30px_rgba(0,0,0,0.1)]"
@@ -84,7 +83,6 @@ const LandingPage = () => {
         </button>
       </nav>
 
-      {/* --- HERO SECTION --- */}
       <main
         ref={heroRef}
         id="home"
@@ -117,7 +115,6 @@ const LandingPage = () => {
           tech careers by automating their outreach.
         </p>
 
-        {/* Social Proof */}
         <div
           ref={addToRefs}
           className="flex items-center gap-4 mb-12 bg-white/5 border border-white/10 px-6 py-3 rounded-full backdrop-blur-sm"
@@ -152,7 +149,6 @@ const LandingPage = () => {
         </div>
       </main>
 
-      {/* --- SECTION 1: FEATURES --- */}
       <section
         id="features"
         className="py-24 relative z-10 border-t border-white/5"
@@ -210,8 +206,7 @@ const LandingPage = () => {
             How AgentX Works
           </h2>
           <div className="flex flex-col md:flex-row items-start justify-center gap-8 relative">
-            {/* Connecting Line */}
-            <div className="hidden md:block absolute top-8 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-[#ea580c]/50 to-transparent"></div>
+            <div className="hidden md:block absolute top-8 left-1/4 right-1/4 h-px bg-linear-to-r from-transparent via-[#ea580c]/50 to-transparent"></div>
 
             {[
               {
@@ -246,7 +241,7 @@ const LandingPage = () => {
                 <h4 className="text-lg font-medium text-white mb-2">
                   {item.title}
                 </h4>
-                <p className="text-sm text-gray-400 font-light max-w-[200px]">
+                <p className="text-sm text-gray-400 font-light max-w-50">
                   {item.desc}
                 </p>
               </div>
@@ -311,7 +306,6 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* --- SECTION 4: IMPACT METRICS --- */}
       <section id="impact" className="py-24 relative z-10 bg-[#0a0a0a]">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-white/10">
@@ -334,10 +328,9 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* --- SECTION 5: CTA & FOOTER --- */}
       <section className="pt-24 pb-8 relative z-10 border-t border-white/5">
         <div className="max-w-4xl mx-auto px-6 text-center mb-24">
-          <div className="bg-gradient-to-b from-[#111] to-[#050505] border border-white/10 p-12 rounded-3xl relative overflow-hidden">
+          <div className="bg-linear-to-b from-[#111] to-[#050505] border border-white/10 p-12 rounded-3xl relative overflow-hidden">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[#ea580c] blur-[150px] opacity-10 pointer-events-none"></div>
             <h2 className="text-4xl font-medium text-white mb-6 relative z-10">
               Ready to scale your network?
