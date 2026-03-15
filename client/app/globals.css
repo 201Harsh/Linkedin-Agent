@@ -1,18 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  /* Fix: Define the lightened, warm dark background */
   --theme-background: #0d0d0d;
-  /* Fix: Ensure text defaults to unborked white */
   --text-main: #ffffff;
-  /* Define the new Orange theme accent */
   --theme-orange: #f97316;
   --theme-orange-glow: #fbbf24;
 }
 
 html,
 body {
-  /* Corrected the unborked string usage in variables */
   background-color: var(--theme-background);
   color: var(--text-main);
   scroll-behavior: smooth;
@@ -29,7 +25,6 @@ body {
     sans-serif;
 }
 
-/* Updated Agent Glow for Orange theme */
 .agent-glow {
   text-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
 }
