@@ -1,6 +1,10 @@
 import { Router } from "express";
-import { RegisterAndLoginUsingLinkedIn } from "../controllers/user-controller.js";
+import {
+  GetUserDetails,
+  RegisterAndLoginUsingLinkedIn,
+} from "../controllers/user-controller.js";
 import passport from "../lib/passport.js";
+import AuthMiddleware from "../middlewares/auth-middleware.js";
 
 const userRouter = Router();
 
@@ -8,7 +12,7 @@ userRouter.get(
   "/linkedin",
   passport.authenticate("linkedin", {
     state: true,
-    scope: ["openid", "profile", "email"], // MUST be exactly these three
+    scope: ["openid", "profile", "email"],
   } as any),
 );
 
@@ -19,5 +23,7 @@ userRouter.get(
   } as any),
   RegisterAndLoginUsingLinkedIn,
 );
+
+userRouter.get("/me", AuthMiddleware, GetUserDetails);
 
 export default userRouter;
