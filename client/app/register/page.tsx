@@ -1,8 +1,48 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Bot, Linkedin, ShieldCheck, Zap } from "lucide-react";
+import { Bot, Linkedin, ShieldCheck, Zap, AlertTriangle } from "lucide-react";
+
+const handleLinkedInSignIn = async () => {
+  try {
+    window.location.href = `${process.env.NEXT_PUBLIC_SERVER_URL}/users/linkedin`;
+  } catch (err: any) {
+    console.log(err);
+  }
+};
+
+// 1. Separate component to handle search params cleanly
+function ErrorBanner() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+
+  if (!error) return null;
+
+  // Map your backend error codes to human-readable messages
+  const errorMessages: Record<string, string> = {
+    AuthFailed: "LinkedIn authentication failed. Please try again.",
+    NoUser: "Could not retrieve your profile data from LinkedIn.",
+    Tokens_Missing: "Secure connection failed. Missing authentication tokens.",
+    LinkedIn_Auth_Failed: "LinkedIn authorization was rejected or timed out.",
+  };
+
+  const displayMessage =
+    errorMessages[error] || "An unexpected error occurred. Please try again.";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className="w-full bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-start gap-3 mb-6 text-sm text-left shadow-inner"
+    >
+      <AlertTriangle size={18} className="shrink-0 mt-0.5 text-red-500" />
+      <span className="leading-relaxed font-medium">{displayMessage}</span>
+    </motion.div>
+  );
+}
 
 export default function RegisterPage() {
   const containerVariants = {
@@ -13,7 +53,7 @@ export default function RegisterPage() {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: any = {
     hidden: { y: 20, opacity: 0 },
     visible: {
       y: 0,
@@ -59,12 +99,18 @@ export default function RegisterPage() {
             <h1 className="text-3xl font-semibold mb-3 text-white tracking-tight">
               Initialize Agent
             </h1>
-            <p className="text-sm text-gray-400 font-light mb-10">
+            <p className="text-sm text-gray-400 font-light mb-8">
               Connect your professional profile to deploy your AI networking
               assistant.
             </p>
 
+            {/* 2. Suspense Boundary wrapping the Search Params logic */}
+            <Suspense fallback={<div className="h-16 mb-6"></div>}>
+              <ErrorBanner />
+            </Suspense>
+
             <motion.button
+              onClick={handleLinkedInSignIn}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="w-full flex items-center justify-center gap-3 bg-[#0a66c2] hover:bg-[#004182] text-white py-4 rounded-xl font-medium transition-colors shadow-[0_0_20px_rgba(10,102,194,0.3)] hover:shadow-[0_0_40px_rgba(10,102,194,0.6)] border border-[#0a66c2]/50"
