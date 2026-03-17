@@ -22,6 +22,7 @@ const userSchema = new MongooseSchema<IUser>(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     avatar: { type: String, default: "" },
+    refreshToken: { type: String }, // Added to schema
   },
   { timestamps: true },
 );

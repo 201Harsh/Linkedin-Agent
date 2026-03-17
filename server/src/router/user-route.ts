@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   GetUserDetails,
+  RefreshAccessToken,
   RegisterAndLoginUsingLinkedIn,
 } from "../controllers/user-controller.js";
 import passport from "../lib/passport.js";
@@ -25,5 +26,7 @@ userRouter.get(
 );
 
 userRouter.get("/me", AuthMiddleware, GetUserDetails);
+
+userRouter.get("/refresh", RefreshAccessToken);
 
 export default userRouter;
