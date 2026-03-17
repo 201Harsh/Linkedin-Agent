@@ -14,14 +14,12 @@ const handleLinkedInSignIn = async () => {
   }
 };
 
-// 1. Separate component to handle search params cleanly
 function ErrorBanner() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
 
   if (!error) return null;
 
-  // Map your backend error codes to human-readable messages
   const errorMessages: Record<string, string> = {
     AuthFailed: "LinkedIn authentication failed. Please try again.",
     NoUser: "Could not retrieve your profile data from LinkedIn.",
@@ -104,7 +102,6 @@ export default function RegisterPage() {
               assistant.
             </p>
 
-            {/* 2. Suspense Boundary wrapping the Search Params logic */}
             <Suspense fallback={<div className="h-16 mb-6"></div>}>
               <ErrorBanner />
             </Suspense>
