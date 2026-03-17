@@ -5,13 +5,16 @@ import {
 } from "mongoose";
 import jwt from "jsonwebtoken";
 
-// 1. Declare methods in the interface
 export interface IUser extends MongooseDoc {
   linkedinId: string;
   name: string;
   email: string;
   avatar?: string;
-  refreshToken?: string; // Storing this allows you to revoke access later
+  headline?: string;
+  location?: string;
+  connections?: number;
+  profileUrl?: string; // <-- NEW: Directly from the /identityMe API
+  refreshToken?: string;
   createAccessToken: () => string;
   createRefreshToken: () => string;
 }
@@ -22,18 +25,20 @@ const userSchema = new MongooseSchema<IUser>(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     avatar: { type: String, default: "" },
-    refreshToken: { type: String }, // Added to schema
+    headline: { type: String, default: "AgentX User" },
+    location: { type: String, default: "Not Specified" },
+    connections: { type: Number, default: 0 },
+    profileUrl: { type: String, default: "" }, // <-- Added
+    refreshToken: { type: String },
   },
   { timestamps: true },
 );
 
-// 2. Access Token (Short-lived, e.g., 15 minutes)
 // Access Token
 userSchema.methods.createAccessToken = function () {
   const options: jwt.SignOptions = {
     expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || "15m") as any,
   };
-
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET as string, options);
 };
 
@@ -42,7 +47,6 @@ userSchema.methods.createRefreshToken = function () {
   const options: jwt.SignOptions = {
     expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || "7d") as any,
   };
-
   return jwt.sign(
     { id: this._id },
     process.env.JWT_REFRESH_SECRET as string,
@@ -51,5 +55,4 @@ userSchema.methods.createRefreshToken = function () {
 };
 
 const UserModel = model<IUser>("User", userSchema);
-
 export default UserModel;
