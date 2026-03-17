@@ -95,3 +95,32 @@ export const RefreshAccessToken = async (
     return;
   }
 };
+
+export const UpdateUserProfile = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const jwtPayload = req.user as { id: string };
+    const { headline, location, profileUrl } = req.body;
+
+    if (!jwtPayload || !jwtPayload.id) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      jwtPayload.id,
+      {
+        ...(headline && { headline }),
+        ...(location && { location }),
+        ...(profileUrl && { profileUrl }),
+      },
+      { new: true },
+    ).select("-refreshToken");
+
+    res.status(200).json({ user: updatedUser });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

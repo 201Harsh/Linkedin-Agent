@@ -3,6 +3,7 @@ import {
   GetUserDetails,
   RefreshAccessToken,
   RegisterAndLoginUsingLinkedIn,
+  UpdateUserProfile,
 } from "../controllers/user-controller.js";
 import passport from "../lib/passport.js";
 import AuthMiddleware from "../middlewares/auth-middleware.js";
@@ -26,6 +27,7 @@ userRouter.get(
 );
 
 userRouter.get("/me", AuthMiddleware, GetUserDetails);
+userRouter.put("/me", UpdateUserProfile);
 
 userRouter.get("/refresh", RefreshAccessToken);
 
