@@ -8,6 +8,8 @@ dotenv.config();
 const clientID = process.env.LINKEDIN_CLIENT_ID;
 const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
 
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000";
+
 if (!clientID || !clientSecret) {
   throw new Error(
     "LinkedIn OAuth credentials are missing in environment variables",
@@ -32,11 +34,11 @@ passport.use(
     {
       clientID,
       clientSecret,
-      callbackURL: "/users/linkedin/callback",
+      callbackURL: `${SERVER_URL}/users/linkedin/callback`,
       scope: ["openid", "profile", "email"],
-      // @ts-expect-error: Bypassing strict types for state parameter
+      proxy: true,
       state: true,
-    },
+    } as any,
     async (
       accessToken: string,
       refreshToken: string,
@@ -44,9 +46,8 @@ passport.use(
       done: (error: any, user?: any) => void,
     ) => {
       try {
-
         const email = profile.emails?.[0]?.value || profile._json?.email;
-        const linkedinId = profile.id || profile._json?.sub; // 'sub' is the OIDC standard for ID
+        const linkedinId = profile.id || profile._json?.sub;
         const avatar = profile.photos?.[0]?.value || profile._json?.picture;
         const name =
           profile.displayName ||
@@ -64,11 +65,21 @@ passport.use(
         let user = await UserModel.findOne({ email });
 
         if (user) {
+          let isModified = false;
+
           if (!user.linkedinId) {
             user.linkedinId = linkedinId;
-            user.avatar = user.avatar || avatar; // Update avatar if missing
+            isModified = true;
+          }
+          if (!user.avatar && avatar) {
+            user.avatar = avatar;
+            isModified = true;
+          }
+
+          if (isModified) {
             await user.save();
           }
+
           return done(null, user);
         }
 
