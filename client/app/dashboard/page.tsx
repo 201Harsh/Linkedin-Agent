@@ -1,21 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
   Send,
-  MapPin,
-  Briefcase,
-  Users,
   Activity,
   X,
   MessageSquare,
   Sparkles,
-  Link as LinkIcon,
+  Loader2,
 } from "lucide-react";
+import AxiosInstance, { setAccessToken } from "@/config/AxiosInstance";
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([
@@ -31,12 +36,36 @@ export default function DashboardPage() {
     "Optimize Bio",
   ];
 
+  useEffect(() => {
+    // 1. Check URL for token (first-time login)
+    const urlToken = searchParams.get("accessToken");
+
+    if (urlToken) {
+      setAccessToken(urlToken);
+      // Clean the URL silently so the user doesn't see the token
+      window.history.replaceState({}, document.title, "/dashboard");
+    }
+
+    // 2. Fetch User Data (Axios interceptor handles refresh automatically if needed)
+    const fetchUserData = async () => {
+      try {
+        const response = await AxiosInstance.get("/users/me");
+        setUser(response.data.user);
+      } catch (error) {
+        console.error("Failed to fetch user data", error);
+        // Error handling is managed by Axios Interceptor (redirects to login)
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [searchParams]);
+
   const handleSendMessage = (text: string) => {
     if (!text.trim()) return;
-
     setMessages((prev) => [...prev, { role: "user", text }]);
     setChatInput("");
-
     setTimeout(() => {
       setMessages((prev) => [
         ...prev,
@@ -47,6 +76,17 @@ export default function DashboardPage() {
       ]);
     }, 1000);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#ea580c] animate-spin" />
+      </div>
+    );
+  }
+
+  // Fallback if user somehow bypasses loading without data
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#ea580c] relative overflow-hidden flex">
@@ -68,66 +108,45 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <button className="bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-2.5 rounded-full text-sm font-medium transition-all">
-            Settings
-          </button>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
               <div className="h-32 bg-linear-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
-                <div className="absolute inset-0 bg-[linear-linear(rgba(255,255,255,0.05)_1px,transparent_1px),linear-linear(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[20px_20px]"></div>
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
               </div>
 
               <div className="relative px-8 pb-8">
                 <div className="absolute -top-12 left-8 w-24 h-24 bg-[#050505] border-4 border-[#111] rounded-full flex items-center justify-center overflow-hidden shadow-xl z-10">
                   <img
-                    src="https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=200&auto=format&fit=crop"
+                    src={
+                      user.avatar ||
+                      "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=200&auto=format&fit=crop"
+                    }
                     alt="Profile"
                     className="w-full h-full object-cover"
                   />
                 </div>
 
-                {/* Added pt-14 to push text below the absolute avatar */}
                 <div className="pt-14">
                   <h2 className="text-2xl font-bold tracking-tight text-white">
-                    Harsh Pandey
+                    {user.name}
                   </h2>
                   <p className="text-gray-400 text-sm mt-2 leading-relaxed font-light">
-                    Full Stack Developer across Web, Mobile & Desktop | Building
-                    AI-Enhanced Apps & AI Agents
+                    {user.email}
                   </p>
-
-                  <div className="flex flex-col gap-3 mt-5 pb-5 border-b border-white/10">
-                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
-                      <MapPin size={14} className="text-[#ea580c]" />
-                      <span>Nainital, Uttarakhand, India</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
-                      <Users size={14} className="text-[#ea580c]" />
-                      <span>
-                        <span className="font-bold text-white">2,013</span>{" "}
-                        Followers
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
-                      <LinkIcon size={14} className="text-[#ea580c]" />
-                      <a href="#" className="text-blue-400 hover:underline">
-                        Contact Info
-                      </a>
-                    </div>
-                  </div>
 
                   <div className="mt-5">
                     <span className="inline-block bg-[#ea580c]/10 text-[#ea580c] px-3 py-1 rounded-full text-xs font-medium border border-[#ea580c]/20">
-                      Open to work
+                      Agent Active
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Campaign Status Widget */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl">
               <h3 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
                 <Activity size={16} /> Campaign Status
@@ -136,19 +155,19 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
                     <span className="text-gray-400">Requests Sent (Today)</span>
-                    <span className="text-white font-medium">42 / 50</span>
+                    <span className="text-white font-medium">0 / 50</span>
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-1.5">
-                    <div className="bg-[#ea580c] h-1.5 rounded-full w-[84%]"></div>
+                    <div className="bg-[#ea580c] h-1.5 rounded-full w-[0%]"></div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Campaign Feed */}
+          {/* RIGHT COLUMN */}
           <div className="lg:col-span-2">
-            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-125 flex flex-col items-center justify-center text-center p-8">
+            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8">
               <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
               <h3 className="text-xl font-medium text-white mb-2">
                 No Active Campaigns
@@ -162,7 +181,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* --- FLOATING CHATBOT WIDGET --- */}
+      {/* FLOATING CHATBOT WIDGET (Kept identical to your design) */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
         <AnimatePresence>
           {isChatOpen && (
@@ -171,9 +190,9 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-112.5 h-162.5 rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden scrollbar-small"
+              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-[450px] h-[650px] rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
             >
-              <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
+              <div className="p-4 border-b border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-[#ea580c] rounded-full flex items-center justify-center">
                     <Bot size={16} className="text-white" />
@@ -196,7 +215,6 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
                 {messages.map((msg, idx) => (
                   <div
@@ -216,8 +234,7 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* Chat Suggestions */}
-              <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-white/5 scrollbar-small">
+              <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-white/5">
                 {suggestions.map((suggestion, idx) => (
                   <button
                     key={idx}
@@ -273,5 +290,20 @@ export default function DashboardPage() {
         </motion.button>
       </div>
     </div>
+  );
+}
+
+// 2. Wrap the entire page in a Suspense boundary for Next.js build compliance
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-[#ea580c] animate-spin" />
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
