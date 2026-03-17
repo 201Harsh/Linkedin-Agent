@@ -90,7 +90,6 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#ea580c] relative overflow-hidden flex">
-      {/* Ambient Background Glow */}
       <div className="absolute top-0 left-0 w-200 h-200 bg-[#ea580c] rounded-full blur-[250px] opacity-[0.05] pointer-events-none"></div>
 
       <main className="flex-1 p-8 md:p-12 relative z-10 w-full max-w-7xl mx-auto">
@@ -114,7 +113,7 @@ function DashboardContent() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
               <div className="h-32 bg-linear-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[20px_20px]"></div>
               </div>
 
               <div className="relative px-8 pb-8">
@@ -146,7 +145,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Campaign Status Widget */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl">
               <h3 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
                 <Activity size={16} /> Campaign Status
@@ -165,9 +163,8 @@ function DashboardContent() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN */}
           <div className="lg:col-span-2">
-            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8">
+            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-125 flex flex-col items-center justify-center text-center p-8">
               <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
               <h3 className="text-xl font-medium text-white mb-2">
                 No Active Campaigns
@@ -181,7 +178,6 @@ function DashboardContent() {
         </div>
       </main>
 
-      {/* FLOATING CHATBOT WIDGET (Kept identical to your design) */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
         <AnimatePresence>
           {isChatOpen && (
@@ -190,9 +186,9 @@ function DashboardContent() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-[450px] h-[650px] rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
+              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-112.5 h-162.5 rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
             >
-              <div className="p-4 border-b border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
+              <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-[#ea580c] rounded-full flex items-center justify-center">
                     <Bot size={16} className="text-white" />
@@ -293,7 +289,6 @@ function DashboardContent() {
   );
 }
 
-// 2. Wrap the entire page in a Suspense boundary for Next.js build compliance
 export default function DashboardPage() {
   return (
     <Suspense
