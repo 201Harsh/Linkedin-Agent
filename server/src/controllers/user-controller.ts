@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
-import { IUser } from "../models/user-model.js"; // Import your interface
+import UserModel, { IUser } from "../models/user-model.js";
 
 export const RegisterAndLoginUsingLinkedIn = async (
   req: Request,
   res: Response,
 ) => {
   try {
-    const user = req.user as IUser; // Cast to your updated interface
+    const user = req.user as IUser;
 
     if (!user) {
       return res.redirect(
@@ -14,15 +14,9 @@ export const RegisterAndLoginUsingLinkedIn = async (
       );
     }
 
-    // 1. Generate Both Tokens
     const accessToken = user.createAccessToken();
     const refreshToken = user.createRefreshToken();
 
-    // 2. (Optional but recommended) Save the refresh token to the database
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    // 3. Send both tokens to the Next.js Proxy
     const nextJsApiUrl = `${process.env.CLIENT_SIDE_URL}/api/auth`;
     return res.redirect(
       `${nextJsApiUrl}?accessToken=${accessToken}&refreshToken=${refreshToken}`,
@@ -32,5 +26,27 @@ export const RegisterAndLoginUsingLinkedIn = async (
     return res.redirect(
       `${process.env.CLIENT_SIDE_URL}/signin?error=AuthFailed`,
     );
+  }
+};
+
+export const GetUserDetails = async (req: Request, res: Response) => {
+  try {
+    const userID = req.user as any
+
+    if (!userID) {
+      return res.status(401).json({
+        error: "Unauthorized Access. Please Login First !",
+      });
+    }
+
+    const user = await UserModel.findById(userID.id);
+
+    return res.status(200).json({
+      user: user,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
