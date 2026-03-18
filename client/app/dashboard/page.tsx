@@ -5,10 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
-  Send,
   Activity,
   X,
-  MessageSquare,
   Sparkles,
   Loader2,
   MapPin,
@@ -19,6 +17,7 @@ import {
   Save,
 } from "lucide-react";
 import AxiosInstance, { setAccessToken } from "@/config/AxiosInstance";
+import ChatWidget from "../Components/ChatWidget";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -27,15 +26,7 @@ function DashboardContent() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      role: "agent",
-      text: "AgentX online. I have analyzed your profile. Ready to find targets or write connection notes?",
-    },
-  ]);
-
+  // Edit Profile State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     headline: "",
@@ -43,12 +34,6 @@ function DashboardContent() {
     profileUrl: "",
   });
   const [isSaving, setIsSaving] = useState(false);
-
-  const suggestions = [
-    "Find Web Dev HRs",
-    "List Tech Startups",
-    "Optimize Bio",
-  ];
 
   useEffect(() => {
     const urlToken = searchParams.get("accessToken");
@@ -69,14 +54,16 @@ function DashboardContent() {
       try {
         const response = await AxiosInstance.get("/users/me");
         setUser(response.data.user);
-
         setEditForm({
           headline: response.data.user.headline || "",
           location: response.data.user.location || "",
           profileUrl: response.data.user.profileUrl || "",
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch user data", error);
+        if (error.response?.status === 401) {
+          router.push("/");
+        }
       } finally {
         setLoading(false);
       }
@@ -84,21 +71,6 @@ function DashboardContent() {
 
     fetchUserData();
   }, [searchParams, router]);
-
-  const handleSendMessage = (text: string) => {
-    if (!text.trim()) return;
-    setMessages((prev) => [...prev, { role: "user", text }]);
-    setChatInput("");
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          text: "Searching Tavily for your targets now. I will line them up for connection.",
-        },
-      ]);
-    }, 1000);
-  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +119,7 @@ function DashboardContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
+            {/* --- PROFILE CARD --- */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
               <button
                 onClick={() => setIsEditModalOpen(true)}
@@ -155,8 +128,8 @@ function DashboardContent() {
                 <Edit2 size={14} className="text-gray-300" />
               </button>
 
-              <div className="h-32 bg-linear-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
-                <div className="absolute inset-0 bg-[linear-linear(rgba(255,255,255,0.05)_1px,transparent_1px),linear-linear(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[20px_20px]"></div>
+              <div className="h-32 bg-gradient-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
               </div>
 
               <div className="relative px-8 pb-8">
@@ -217,7 +190,7 @@ function DashboardContent() {
                           href={user.profileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 transition-colors truncate max-w-50"
+                          className="text-blue-400 hover:text-blue-300 transition-colors truncate max-w-[200px]"
                         >
                           {user.profileUrl.replace(
                             "https://www.linkedin.com/in/",
@@ -256,7 +229,7 @@ function DashboardContent() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-125 flex flex-col items-center justify-center text-center p-8">
+            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8">
               <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
               <h3 className="text-xl font-medium text-white mb-2">
                 No Active Campaigns
@@ -270,9 +243,10 @@ function DashboardContent() {
         </div>
       </main>
 
+      {/* --- EDIT PROFILE MODAL --- */}
       <AnimatePresence>
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -305,7 +279,6 @@ function DashboardContent() {
                     className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">
                     Location
@@ -320,7 +293,6 @@ function DashboardContent() {
                     className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">
                     LinkedIn Profile URL
@@ -335,7 +307,6 @@ function DashboardContent() {
                     className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors"
                   />
                 </div>
-
                 <button
                   type="submit"
                   disabled={isSaving}
@@ -355,113 +326,8 @@ function DashboardContent() {
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-        <AnimatePresence>
-          {isChatOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-112.5 h-162.5 rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
-            >
-              <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-[#ea580c] rounded-full flex items-center justify-center">
-                    <Bot size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">AgentX</h3>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wider">
-                        Online
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsChatOpen(false)}
-                  className="text-gray-400 hover:text-white transition-colors bg-white/5 p-1.5 rounded-full"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm font-light leading-relaxed ${
-                        msg.role === "user"
-                          ? "bg-[#ea580c] text-white rounded-tr-sm"
-                          : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-white/5">
-                {suggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(suggestion)}
-                    className="whitespace-nowrap bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs px-3 py-1.5 rounded-full transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-4 border-t border-white/10 bg-[#0a0a0a]">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendMessage(chatInput);
-                  }}
-                  className="relative"
-                >
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask AgentX to find HRs..."
-                    className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors"
-                  />
-                  <button
-                    type="submit"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-[#ea580c] hover:bg-[#f97316] rounded-lg text-white transition-colors"
-                  >
-                    <Send size={16} />
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="w-14 h-14 bg-[#ea580c] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] transition-shadow relative z-50"
-        >
-          {isChatOpen ? (
-            <X size={24} className="text-white" />
-          ) : (
-            <MessageSquare size={24} className="text-white" />
-          )}
-          {!isChatOpen && (
-            <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-white border-2 border-[#050505] rounded-full"></span>
-          )}
-        </motion.button>
-      </div>
+      {/* --- MOUNT THE ISOLATED CHAT WIDGET --- */}
+      <ChatWidget />
     </div>
   );
 }

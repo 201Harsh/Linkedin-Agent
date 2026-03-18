@@ -1,0 +1,272 @@
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Bot, Send, X, MessageSquare } from "lucide-react";
+import AxiosInstance from "@/config/AxiosInstance";
+
+interface Message {
+  id: string;
+  role: "agent" | "user";
+  text: string;
+}
+
+export default function ChatWidget() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome-msg",
+      role: "agent",
+      text: "AgentX online. I have analyzed your profile. Who are we targeting today?",
+    },
+  ]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
+
+  const suggestions = [
+    "Find Web Dev HRs",
+    "List Tech Startups in BLR",
+    "Optimize Bio",
+  ];
+
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim()) return;
+
+    const userMsgId = Date.now().toString();
+    setMessages((prev) => [...prev, { id: userMsgId, role: "user", text }]);
+    setInput("");
+    setIsTyping(true);
+
+    try {
+      // Calling your authenticated Groq + Tavily endpoint
+      const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "agent",
+          text: response.data.response,
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "agent",
+          text: "⚠️ Connection to AgentX lost. Please check your network or API keys.",
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{
+              opacity: 0,
+              y: 40,
+              scale: 0.9,
+              transformOrigin: "bottom right",
+            }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="bg-[#111]/95 backdrop-blur-3xl border border-white/10 w-[400px] h-[600px] sm:w-[450px] sm:h-[650px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] mb-6 flex flex-col overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#ea580c]/15 flex justify-between items-center shadow-sm z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-gradient-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-inner">
+                  <Bot size={18} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    AgentX
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">
+                      Autonomous Mode
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-gray-400 hover:text-white hover:bg-white/10 transition-all p-2 rounded-full"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Chat Area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5 flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+              <AnimatePresence initial={false}>
+                {messages.map((msg) => (
+                  <motion.div
+                    key={msg.id}
+                    layout // Smoothly slides existing messages up
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] font-light leading-relaxed whitespace-pre-wrap shadow-sm ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
+                          : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Typing Indicator */}
+              {isTyping && (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex justify-start"
+                >
+                  <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-5 py-4 flex gap-1.5 items-center w-fit">
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                        delay: 0.2,
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                        delay: 0.4,
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
+                  </div>
+                </motion.div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Suggestions */}
+            <div className="px-4 py-3 flex gap-2 overflow-x-auto border-t border-white/5 bg-[#0a0a0a]/50 scrollbar-hide">
+              {suggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(suggestion)}
+                  disabled={isTyping}
+                  className="whitespace-nowrap bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs px-4 py-2 rounded-full transition-all disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+
+            {/* Input Area */}
+            <div className="p-4 border-t border-white/10 bg-[#0a0a0a]">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage(input);
+                }}
+                className="relative flex items-center"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={isTyping}
+                  placeholder="Command AgentX..."
+                  className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors disabled:opacity-50 shadow-inner"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isTyping}
+                  className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md"
+                >
+                  <Send
+                    size={16}
+                    className={
+                      input.trim() && !isTyping
+                        ? "translate-x-0.5 -translate-y-0.5 transition-transform"
+                        : ""
+                    }
+                  />
+                </button>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toggle Button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-16 h-16 bg-gradient-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(234,88,12,0.4)] hover:shadow-[0_0_35px_rgba(234,88,12,0.6)] transition-shadow relative z-50 border border-white/10"
+      >
+        <AnimatePresence mode="wait">
+          {isOpen ? (
+            <motion.div
+              key="close"
+              initial={{ rotate: -90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <X size={26} className="text-white" />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="open"
+              initial={{ rotate: 90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: -90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <MessageSquare size={26} className="text-white" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {!isOpen && (
+          <span className="absolute top-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-[#050505] rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
+        )}
+      </motion.button>
+    </div>
+  );
+}
