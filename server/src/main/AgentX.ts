@@ -10,7 +10,7 @@ async function searchLinkedInTavily(query: string) {
       api_key: process.env.TAVILY_API_KEY,
       query: query,
       search_depth: "basic",
-      max_results: 3,
+      max_results: 4,
     });
 
     return response.data.results.map((r: any) => ({
@@ -24,7 +24,7 @@ async function searchLinkedInTavily(query: string) {
 }
 
 export async function AgentX({ prompt, user }: { prompt: string; user: any }) {
-  const MODEL_NAME = "llama-3.3-70b-versatile";
+  const MODEL_NAME = "llama-3.1-8b-instant";
 
   const messages: any[] = [
     {
@@ -35,23 +35,23 @@ Headline: ${user.headline || "Not specified"}.
 Location: ${user.location || "Not specified"}.
 
 CRITICAL RULES:
-1. THE SEARCH PROTOCOL: IF the user asks to find, connect with, or search for people:
-   - YOU MUST use the 'search_linkedin' tool.
+1. THE SEARCH PROTOCOL: IF the user asks to find, connect with, or search for people, HRs, startups, or companies:
+   - YOU MUST use the 'search_linkedin' tool. IT IS YOUR ONLY TOOL.
+   - NEVER invent or use tools like 'brave_search' or 'echo'. 
+   - ABSOLUTELY NO XML TAGS. Do NOT output raw <function> tags.
    - You MUST output the final result ONLY as a JSON code block. No intro text, no outro text.
    - The JSON must match this exact structure:
    \`\`\`json
    {
      "leads": [
-       { "name": "John Doe", "url": "https://linkedin.com/in/...", "note": "Hi John, saw your work..." }
+       { "name": "Target Name", "url": "https://linkedin.com/in/...", "note": "Personalized connection note..." }
      ]
    }
    \`\`\`
 
 2. THE ADVICE PROTOCOL: IF the user asks for profile advice (e.g., "Optimize my bio"):
    - DO NOT use the search tool.
-   - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.
-
-3. NEVER attempt to use a tool named 'echo'.`,
+   - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.`,
     },
     {
       role: "user",
@@ -62,20 +62,21 @@ CRITICAL RULES:
   const completion = await groq.chat.completions.create({
     model: MODEL_NAME,
     messages: messages,
+    temperature: 0.2,
     tools: [
       {
         type: "function",
         function: {
           name: "search_linkedin",
           description:
-            "Searches the web for LinkedIn profiles. ONLY use when user asks to find people.",
+            "Searches the web for LinkedIn profiles and companies. Use this for ANY internet search request, including startups, HRs, or specific people.",
           parameters: {
             type: "object",
             properties: {
               search_query: {
                 type: "string",
                 description:
-                  'The Google Dork query. Format: site:linkedin.com/in/ "Job" AND "Location"',
+                  'The Google Dork query. Format: site:linkedin.com/in/ "Target" AND "Location" OR site:linkedin.com/company/ "Company"',
               },
             },
             required: ["search_query"],
@@ -108,6 +109,7 @@ CRITICAL RULES:
     const finalCompletion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: messages,
+      temperature: 0.2,
     });
 
     return finalCompletion.choices[0]?.message?.content || "";
