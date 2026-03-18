@@ -37,6 +37,7 @@ export const AgentXAI = async (req: Request, res: Response) => {
     });
     return;
   } catch (error: any) {
+    console.error(error);
     res.status(500).json({
       error: error.message,
     });
