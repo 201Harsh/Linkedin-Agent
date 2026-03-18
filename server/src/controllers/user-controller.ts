@@ -16,6 +16,7 @@ export const RegisterAndLoginUsingLinkedIn = async (
     }
 
     const accessToken = user.createAccessToken();
+    console.log(accessToken)
     const refreshToken = user.createRefreshToken();
 
     user.refreshToken = refreshToken;

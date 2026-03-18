@@ -29,7 +29,7 @@ const userSchema = new MongooseSchema<IUser>(
     location: { type: String, default: "Not Specified" },
     connections: { type: Number, default: 0 },
     profileUrl: { type: String, default: "" }, // <-- Added
-    refreshToken: { type: String },
+    refreshToken: { type: String, select: false },
   },
   { timestamps: true },
 );

@@ -5,6 +5,7 @@ import session from "express-session";
 import passport from "passport";
 import "./lib/passport.js"; 
 import UserRouter from "./router/user-route.js";
+import aiRouter from "./router/ai-router.js";
 
 const app = express();
 
@@ -31,5 +32,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use("/users", UserRouter);
+app.use("/ai", aiRouter);
 
 export default app;
