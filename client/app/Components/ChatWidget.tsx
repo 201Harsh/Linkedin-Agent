@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Send, X, MessageSquare } from "lucide-react";
 import AxiosInstance from "@/config/AxiosInstance";
+import ReactMarkdown from "react-markdown"; // <-- NEW IMPORT
 
 interface Message {
   id: string;
@@ -19,22 +20,17 @@ export default function ChatWidget() {
     {
       id: "welcome-msg",
       role: "agent",
-      text: "AgentX online. I have analyzed your profile. Who are we targeting today?",
+      text: "AgentX online. I have analyzed your profile. Who are we targeting today, or do you need me to review your bio?",
     },
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const suggestions = [
-    "Find Web Dev HRs",
-    "List Tech Startups in BLR",
-    "Optimize Bio",
-  ];
+  const suggestions = ["Find Web Dev HRs", "List Tech Startups in BLR", "Optimize Bio"];
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -45,16 +41,11 @@ export default function ChatWidget() {
     setIsTyping(true);
 
     try {
-      // Calling your authenticated Groq + Tavily endpoint
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
-
+      
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now().toString(),
-          role: "agent",
-          text: response.data.response,
-        },
+        { id: Date.now().toString(), role: "agent", text: response.data.response },
       ]);
     } catch (error) {
       setMessages((prev) => [
@@ -75,12 +66,7 @@ export default function ChatWidget() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{
-              opacity: 0,
-              y: 40,
-              scale: 0.9,
-              transformOrigin: "bottom right",
-            }}
+            initial={{ opacity: 0, y: 40, scale: 0.9, transformOrigin: "bottom right" }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.9 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -93,9 +79,7 @@ export default function ChatWidget() {
                   <Bot size={18} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white tracking-wide">
-                    AgentX
-                  </h3>
+                  <h3 className="text-sm font-bold text-white tracking-wide">AgentX</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
                     <span className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">
@@ -118,20 +102,38 @@ export default function ChatWidget() {
                 {messages.map((msg) => (
                   <motion.div
                     key={msg.id}
-                    layout // Smoothly slides existing messages up
+                    layout
                     initial={{ opacity: 0, y: 20, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[15px] font-light leading-relaxed whitespace-pre-wrap shadow-sm ${
+                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${
                         msg.role === "user"
                           ? "bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
                           : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm"
                       }`}
                     >
-                      {msg.text}
+                      {/* --- THE MARKDOWN UPGRADE --- */}
+                      <ReactMarkdown
+                        components={{
+                          a: ({ node, ...props }) => (
+                            <a
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium"
+                              {...props}
+                            />
+                          ),
+                          p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                          ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
+                          ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                          strong: ({ node, ...props }) => <strong className="font-semibold text-white" {...props} />,
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
                     </div>
                   </motion.div>
                 ))}
@@ -139,50 +141,18 @@ export default function ChatWidget() {
 
               {/* Typing Indicator */}
               {isTyping && (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex justify-start"
-                >
+                <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="flex justify-start">
                   <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-5 py-4 flex gap-1.5 items-center w-fit">
-                    <motion.div
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.6,
-                        ease: "easeInOut",
-                      }}
-                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
-                    />
-                    <motion.div
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.6,
-                        ease: "easeInOut",
-                        delay: 0.2,
-                      }}
-                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
-                    />
-                    <motion.div
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.6,
-                        ease: "easeInOut",
-                        delay: 0.4,
-                      }}
-                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
-                    />
+                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut" }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
+                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.2 }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
+                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.4 }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
                   </div>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Suggestions */}
+            {/* Suggestions & Input Area */}
             <div className="px-4 py-3 flex gap-2 overflow-x-auto border-t border-white/5 bg-[#0a0a0a]/50 scrollbar-hide">
               {suggestions.map((suggestion, idx) => (
                 <button
@@ -196,15 +166,8 @@ export default function ChatWidget() {
               ))}
             </div>
 
-            {/* Input Area */}
             <div className="p-4 border-t border-white/10 bg-[#0a0a0a]">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendMessage(input);
-                }}
-                className="relative flex items-center"
-              >
+              <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(input); }} className="relative flex items-center">
                 <input
                   type="text"
                   value={input}
@@ -213,19 +176,8 @@ export default function ChatWidget() {
                   placeholder="Command AgentX..."
                   className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors disabled:opacity-50 shadow-inner"
                 />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isTyping}
-                  className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md"
-                >
-                  <Send
-                    size={16}
-                    className={
-                      input.trim() && !isTyping
-                        ? "translate-x-0.5 -translate-y-0.5 transition-transform"
-                        : ""
-                    }
-                  />
+                <button type="submit" disabled={!input.trim() || isTyping} className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md">
+                  <Send size={16} className={input.trim() && !isTyping ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
                 </button>
               </form>
             </div>
@@ -242,23 +194,11 @@ export default function ChatWidget() {
       >
         <AnimatePresence mode="wait">
           {isOpen ? (
-            <motion.div
-              key="close"
-              initial={{ rotate: -90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: 90, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
               <X size={26} className="text-white" />
             </motion.div>
           ) : (
-            <motion.div
-              key="open"
-              initial={{ rotate: 90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: -90, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
               <MessageSquare size={26} className="text-white" />
             </motion.div>
           )}
