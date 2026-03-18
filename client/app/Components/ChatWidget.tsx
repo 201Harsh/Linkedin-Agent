@@ -2,15 +2,62 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, X, MessageSquare } from "lucide-react";
+import {
+  Bot,
+  Send,
+  X,
+  MessageSquare,
+  Link as LinkIcon,
+  Copy,
+  CheckCircle2,
+  Sparkles,
+} from "lucide-react";
 import AxiosInstance from "@/config/AxiosInstance";
-import ReactMarkdown from "react-markdown"; // <-- NEW IMPORT
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
   role: "agent" | "user";
   text: string;
 }
+
+// --- THE INTERACTIVE LEAD CARD COMPONENT ---
+const LeadCard = ({
+  lead,
+}: {
+  lead: { name: string; url: string; note: string };
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleConnect = async () => {
+    // 1. Copy the AI note to clipboard
+    await navigator.clipboard.writeText(lead.note);
+    setCopied(true);
+    // 2. Open LinkedIn in a new tab
+    window.open(lead.url, "_blank");
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  return (
+    <div className="bg-[#050505] border border-white/10 rounded-xl p-4 mb-3 last:mb-0 shadow-lg relative overflow-hidden group">
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-white font-semibold text-sm truncate pr-4">
+          {lead.name}
+        </h4>
+        <button
+          onClick={handleConnect}
+          className="bg-[#ea580c]/10 hover:bg-[#ea580c]/20 text-[#ea580c] border border-[#ea580c]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
+        >
+          {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+          {copied ? "Copied & Opened!" : "1-Click Connect"}
+        </button>
+      </div>
+      <div className="bg-[#111] p-3 rounded-lg border border-white/5">
+        <p className="text-gray-400 text-xs italic">"{lead.note}"</p>
+      </div>
+    </div>
+  );
+};
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,7 +77,11 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const suggestions = ["Find Web Dev HRs", "List Tech Startups in BLR", "Optimize Bio"];
+  const suggestions = [
+    "Find Web Dev HRs",
+    "List Tech Startups in BLR",
+    "Optimize Bio",
+  ];
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -42,10 +93,13 @@ export default function ChatWidget() {
 
     try {
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
-      
       setMessages((prev) => [
         ...prev,
-        { id: Date.now().toString(), role: "agent", text: response.data.response },
+        {
+          id: Date.now().toString(),
+          role: "agent",
+          text: response.data.response,
+        },
       ]);
     } catch (error) {
       setMessages((prev) => [
@@ -61,12 +115,86 @@ export default function ChatWidget() {
     }
   };
 
+  // --- PARSING LOGIC TO RENDER CARDS OR TEXT ---
+  const renderMessageContent = (text: string) => {
+    // Safely construct the regex to avoid markdown parser collisions
+    const codeBlockMarker = "```";
+    const regex = new RegExp(
+      codeBlockMarker + "(?:json)?\\s*([\\s\\S]*?)\\s*" + codeBlockMarker,
+    );
+    const jsonMatch = text.match(regex);
+
+    if (jsonMatch) {
+      try {
+        const data = JSON.parse(jsonMatch[1]);
+        if (data.leads && Array.isArray(data.leads)) {
+          return (
+            <div className="mt-1">
+              <p className="text-[#ea580c] text-xs font-bold mb-3 tracking-wider uppercase flex items-center gap-1.5">
+                <Sparkles size={12} /> Targets Acquired
+              </p>
+              {data.leads.map((lead: any, idx: number) => (
+                <LeadCard key={idx} lead={lead} />
+              ))}
+            </div>
+          );
+        }
+      } catch (e) {
+        console.error("Failed to parse Agent JSON", e);
+        // If parsing fails, fall through to normal markdown render
+      }
+    }
+
+    // Standard Markdown Render (for Bio Advice, greetings, etc.)
+    return (
+      <ReactMarkdown
+        components={{
+          a: ({ node, ...props }) => (
+            <a
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium flex items-center gap-1 inline-flex"
+              {...props}
+            >
+              {props.children} <LinkIcon size={10} />
+            </a>
+          ),
+          p: ({ node, ...props }) => (
+            <p className="mb-2 last:mb-0" {...props} />
+          ),
+          ul: ({ node, ...props }) => (
+            <ul
+              className="list-disc ml-4 mb-2 space-y-1 text-gray-300"
+              {...props}
+            />
+          ),
+          ol: ({ node, ...props }) => (
+            <ol
+              className="list-decimal ml-4 mb-2 space-y-1 text-gray-300"
+              {...props}
+            />
+          ),
+          strong: ({ node, ...props }) => (
+            <strong className="font-semibold text-white" {...props} />
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    );
+  };
+
   return (
     <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.9, transformOrigin: "bottom right" }}
+            initial={{
+              opacity: 0,
+              y: 40,
+              scale: 0.9,
+              transformOrigin: "bottom right",
+            }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.9 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -79,7 +207,9 @@ export default function ChatWidget() {
                   <Bot size={18} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white tracking-wide">AgentX</h3>
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    AgentX
+                  </h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
                     <span className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">
@@ -112,28 +242,13 @@ export default function ChatWidget() {
                       className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${
                         msg.role === "user"
                           ? "bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
-                          : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm"
+                          : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm w-full"
                       }`}
                     >
-                      {/* --- THE MARKDOWN UPGRADE --- */}
-                      <ReactMarkdown
-                        components={{
-                          a: ({ node, ...props }) => (
-                            <a
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium"
-                              {...props}
-                            />
-                          ),
-                          p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                          ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                          ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
-                          strong: ({ node, ...props }) => <strong className="font-semibold text-white" {...props} />,
-                        }}
-                      >
-                        {msg.text}
-                      </ReactMarkdown>
+                      {/* --- EXECUTE THE PARSER --- */}
+                      {msg.role === "user"
+                        ? msg.text
+                        : renderMessageContent(msg.text)}
                     </div>
                   </motion.div>
                 ))}
@@ -141,11 +256,43 @@ export default function ChatWidget() {
 
               {/* Typing Indicator */}
               {isTyping && (
-                <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="flex justify-start">
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex justify-start"
+                >
                   <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-5 py-4 flex gap-1.5 items-center w-fit">
-                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut" }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
-                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.2 }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
-                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.4 }} className="w-1.5 h-1.5 bg-[#ea580c] rounded-full" />
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                        delay: 0.2,
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.6,
+                        ease: "easeInOut",
+                        delay: 0.4,
+                      }}
+                      className="w-1.5 h-1.5 bg-[#ea580c] rounded-full"
+                    />
                   </div>
                 </motion.div>
               )}
@@ -167,7 +314,13 @@ export default function ChatWidget() {
             </div>
 
             <div className="p-4 border-t border-white/10 bg-[#0a0a0a]">
-              <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(input); }} className="relative flex items-center">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage(input);
+                }}
+                className="relative flex items-center"
+              >
                 <input
                   type="text"
                   value={input}
@@ -176,8 +329,19 @@ export default function ChatWidget() {
                   placeholder="Command AgentX..."
                   className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors disabled:opacity-50 shadow-inner"
                 />
-                <button type="submit" disabled={!input.trim() || isTyping} className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md">
-                  <Send size={16} className={input.trim() && !isTyping ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isTyping}
+                  className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md"
+                >
+                  <Send
+                    size={16}
+                    className={
+                      input.trim() && !isTyping
+                        ? "translate-x-0.5 -translate-y-0.5 transition-transform"
+                        : ""
+                    }
+                  />
                 </button>
               </form>
             </div>
@@ -194,11 +358,23 @@ export default function ChatWidget() {
       >
         <AnimatePresence mode="wait">
           {isOpen ? (
-            <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+            <motion.div
+              key="close"
+              initial={{ rotate: -90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
               <X size={26} className="text-white" />
             </motion.div>
           ) : (
-            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+            <motion.div
+              key="open"
+              initial={{ rotate: 90, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: -90, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
               <MessageSquare size={26} className="text-white" />
             </motion.div>
           )}
