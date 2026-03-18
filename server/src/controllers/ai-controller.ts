@@ -30,10 +30,11 @@ export const AgentXAI = async (req: Request, res: Response) => {
       return;
     }
 
-    const response = await AgentX({ prompt });
+    // Pass the user data into the Agent!
+    const response = await AgentX({ prompt, user });
+
     res.status(200).json({
       response,
-      user,
     });
     return;
   } catch (error: any) {
