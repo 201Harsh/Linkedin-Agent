@@ -1,8 +1,10 @@
 import Groq from "groq-sdk";
 import axios from "axios";
 
+// Automatically picks up process.env.GROQ_API_KEY
 const groq = new Groq();
 
+// --- TAVILY SEARCH HELPER ---
 async function searchLinkedInTavily(query: string) {
   console.log(`[Tavily] Executing search: ${query}`);
   try {
@@ -12,7 +14,8 @@ async function searchLinkedInTavily(query: string) {
       search_depth: "basic",
       max_results: 3, // Keep this low for fast MVP testing
     });
-
+    
+    // We only return the URL and content to save context window space
     return response.data.results.map((r: any) => ({
       url: r.url,
       content: r.content,
@@ -23,21 +26,31 @@ async function searchLinkedInTavily(query: string) {
   }
 }
 
+// --- THE MAIN AGENT FUNCTION ---
 export async function AgentX({ prompt, user }: { prompt: string; user: any }) {
   const MODEL_NAME = "llama-3.3-70b-versatile";
 
+  // 1. Give the Agent Context about YOU and STRICT Rules
   const messages: any[] = [
     {
       role: "system",
       content: `You are AgentX, an elite LinkedIn networking AI.
 Your user is: ${user.name}.
-Headline: ${user.headline}.
-Location: ${user.location}.
+Headline: ${user.headline || "Not specified"}.
+Location: ${user.location || "Not specified"}.
 
 CRITICAL RULES:
-1. Your ONLY tool is 'search_linkedin'. NEVER attempt to use a tool named 'echo' or any other tool.
-2. When asked to find someone, ALWAYS use 'search_linkedin' to generate a Google Dork query like: site:linkedin.com/in/ "Job Title" AND "Location".
-3. After getting the search results, write a connection note (under 300 characters) for each target. Connect something from their profile snippet to your user's headline.`,
+1. THE SEARCH PROTOCOL: IF the user asks to find, connect with, or search for people/leads/HRs:
+   - YOU MUST use the 'search_linkedin' tool to generate a Google Dork query (e.g., site:linkedin.com/in/ "Job Title" AND "Location").
+   - Format your response as a numbered list.
+   - For EACH person, provide their Name, a clickable Markdown link to their profile, and a personalized connection note. 
+   - FORMAT EXAMPLE: "1. **[John Doe](https://linkedin.com/in/johndoe)** - Hi John, saw your work in AI..."
+
+2. THE ADVICE PROTOCOL: IF the user asks for profile advice (e.g., "Optimize my bio", "How is my headline?"):
+   - DO NOT use the search tool.
+   - Act as an expert LinkedIn consultant. Give them 3 bullet points of highly specific, actionable advice based on their current Headline and Location.
+
+3. NEVER attempt to use a tool named 'echo' or anything other than 'search_linkedin'.`,
     },
     {
       role: "user",
@@ -45,6 +58,7 @@ CRITICAL RULES:
     },
   ];
 
+  // 2. Initial Call
   const completion = await groq.chat.completions.create({
     model: MODEL_NAME,
     messages: messages,
@@ -53,14 +67,13 @@ CRITICAL RULES:
         type: "function",
         function: {
           name: "search_linkedin",
-          description: "Searches the web for LinkedIn profiles.",
+          description: "Searches the web for LinkedIn profiles. ONLY use when user asks to find people.",
           parameters: {
             type: "object",
             properties: {
               search_query: {
                 type: "string",
-                description:
-                  'The exact Google Dork query. Format: site:linkedin.com/in/ "Job" AND "Location"',
+                description: 'The exact Google Dork query. Format: site:linkedin.com/in/ "Job" AND "Location"',
               },
             },
             required: ["search_query"],
@@ -73,15 +86,18 @@ CRITICAL RULES:
 
   const responseMessage = completion.choices[0]?.message;
 
+  // 3. Tool Execution
   if (responseMessage?.tool_calls) {
     messages.push(responseMessage);
 
     for (const toolCall of responseMessage.tool_calls) {
       if (toolCall.function.name === "search_linkedin") {
         const args = JSON.parse(toolCall.function.arguments);
-
+        
+        // Execute the actual Tavily API call
         const searchResults = await searchLinkedInTavily(args.search_query);
 
+        // Feed the results BACK to Groq
         messages.push({
           tool_call_id: toolCall.id,
           role: "tool",
@@ -91,6 +107,7 @@ CRITICAL RULES:
       }
     }
 
+    // 4. Second Call: Groq reads the search results and writes the notes
     const finalCompletion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: messages,
