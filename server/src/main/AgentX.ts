@@ -1,10 +1,8 @@
 import Groq from "groq-sdk";
 import axios from "axios";
 
-// Automatically picks up process.env.GROQ_API_KEY
 const groq = new Groq();
 
-// --- TAVILY SEARCH HELPER ---
 async function searchLinkedInTavily(query: string) {
   console.log(`[Tavily] Executing search: ${query}`);
   try {
@@ -25,7 +23,6 @@ async function searchLinkedInTavily(query: string) {
   }
 }
 
-// --- THE MAIN AGENT FUNCTION ---
 export async function AgentX({ prompt, user }: { prompt: string; user: any }) {
   const MODEL_NAME = "llama-3.3-70b-versatile";
 

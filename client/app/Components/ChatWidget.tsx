@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
@@ -21,7 +21,6 @@ interface Message {
   text: string;
 }
 
-// --- THE INTERACTIVE LEAD CARD COMPONENT ---
 const LeadCard = ({
   lead,
 }: {
@@ -30,10 +29,8 @@ const LeadCard = ({
   const [copied, setCopied] = useState(false);
 
   const handleConnect = async () => {
-    // 1. Copy the AI note to clipboard
     await navigator.clipboard.writeText(lead.note);
     setCopied(true);
-    // 2. Open LinkedIn in a new tab
     window.open(lead.url, "_blank");
     setTimeout(() => setCopied(false), 3000);
   };
@@ -115,9 +112,7 @@ export default function ChatWidget() {
     }
   };
 
-  // --- PARSING LOGIC TO RENDER CARDS OR TEXT ---
   const renderMessageContent = (text: string) => {
-    // Safely construct the regex to avoid markdown parser collisions
     const codeBlockMarker = "```";
     const regex = new RegExp(
       codeBlockMarker + "(?:json)?\\s*([\\s\\S]*?)\\s*" + codeBlockMarker,
@@ -145,7 +140,6 @@ export default function ChatWidget() {
       }
     }
 
-    // Standard Markdown Render (for Bio Advice, greetings, etc.)
     return (
       <ReactMarkdown
         components={{
@@ -153,7 +147,7 @@ export default function ChatWidget() {
             <a
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium flex items-center gap-1 inline-flex"
+              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium flex items-center gap-1"
               {...props}
             >
               {props.children} <LinkIcon size={10} />
@@ -185,7 +179,7 @@ export default function ChatWidget() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+    <div className="fixed bottom-6 right-6 z-100 flex flex-col items-end scrollbar-small">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -198,12 +192,12 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.9 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="bg-[#111]/95 backdrop-blur-3xl border border-white/10 w-[400px] h-[600px] sm:w-[450px] sm:h-[650px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] mb-6 flex flex-col overflow-hidden"
+            className="bg-[#111]/95 backdrop-blur-3xl border border-white/10 w-100 h-150 sm:w-112.5 sm:h-162.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] mb-6 flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#ea580c]/15 flex justify-between items-center shadow-sm z-10">
+            <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/15 flex justify-between items-center shadow-sm z-10">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gradient-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-inner">
+                <div className="w-9 h-9 bg-linear-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-inner">
                   <Bot size={18} className="text-white" />
                 </div>
                 <div>
@@ -241,7 +235,7 @@ export default function ChatWidget() {
                     <div
                       className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${
                         msg.role === "user"
-                          ? "bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
+                          ? "bg-linear-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
                           : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm w-full"
                       }`}
                     >
@@ -354,7 +348,7 @@ export default function ChatWidget() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-16 h-16 bg-gradient-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(234,88,12,0.4)] hover:shadow-[0_0_35px_rgba(234,88,12,0.6)] transition-shadow relative z-50 border border-white/10"
+        className="w-16 h-16 bg-linear-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(234,88,12,0.4)] hover:shadow-[0_0_35px_rgba(234,88,12,0.6)] transition-shadow relative z-50 border border-white/10"
       >
         <AnimatePresence mode="wait">
           {isOpen ? (
