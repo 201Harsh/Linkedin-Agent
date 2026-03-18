@@ -52,7 +52,7 @@ AxiosInstance.interceptors.response.use(
         // If refresh fails (cookie expired/tampered), force logout
         setAccessToken(null);
         if (typeof window !== "undefined") {
-          window.location.href = "/?error=SessionExpired";
+          window.location.href = "/login?error=SessionExpired";
         }
         return Promise.reject(refreshError);
       }
