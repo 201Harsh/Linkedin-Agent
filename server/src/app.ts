@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
-import "./lib/passport.js"; // CRITICAL: Initializes your LinkedIn Strategy
+import "./lib/passport.js"; 
 import UserRouter from "./router/user-route.js";
 
 const app = express();
@@ -18,13 +18,12 @@ app.use(
   }),
 );
 
-// CRITICAL FIX: Session MUST exist before passport and routes
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "super_secret_agentx_key_12345",
     resave: false,
-    saveUninitialized: true, // Forces session creation for the handshake
-    cookie: { secure: false }, // Must be false for local HTTP development
+    saveUninitialized: true, 
+    cookie: { secure: false },
   }),
 );
 
