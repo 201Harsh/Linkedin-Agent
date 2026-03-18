@@ -15,7 +15,7 @@ import {
   Users,
   Mail,
   Linkedin,
-  Edit2, // <-- Added Edit Icon
+  Edit2,
   Save,
 } from "lucide-react";
 import AxiosInstance, { setAccessToken } from "@/config/AxiosInstance";
@@ -27,7 +27,6 @@ function DashboardContent() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([
@@ -37,7 +36,6 @@ function DashboardContent() {
     },
   ]);
 
-  // Edit Profile State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     headline: "",
@@ -60,10 +58,18 @@ function DashboardContent() {
     }
 
     const fetchUserData = async () => {
+      if (typeof window !== "undefined") {
+        const storedToken = localStorage.getItem("accessToken");
+        if (!storedToken && !urlToken) {
+          router.push("/");
+          return;
+        }
+      }
+
       try {
         const response = await AxiosInstance.get("/users/me");
         setUser(response.data.user);
-        // Pre-fill edit form
+
         setEditForm({
           headline: response.data.user.headline || "",
           location: response.data.user.location || "",
@@ -77,7 +83,7 @@ function DashboardContent() {
     };
 
     fetchUserData();
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const handleSendMessage = (text: string) => {
     if (!text.trim()) return;
@@ -141,9 +147,7 @@ function DashboardContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
-            {/* --- PROFILE CARD --- */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
-              {/* Edit Button */}
               <button
                 onClick={() => setIsEditModalOpen(true)}
                 className="absolute top-4 right-4 z-20 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full transition-colors border border-white/10"
@@ -151,8 +155,8 @@ function DashboardContent() {
                 <Edit2 size={14} className="text-gray-300" />
               </button>
 
-              <div className="h-32 bg-gradient-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+              <div className="h-32 bg-linear-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
+                <div className="absolute inset-0 bg-[linear-linear(rgba(255,255,255,0.05)_1px,transparent_1px),linear-linear(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[20px_20px]"></div>
               </div>
 
               <div className="relative px-8 pb-8">
@@ -213,7 +217,7 @@ function DashboardContent() {
                           href={user.profileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 transition-colors truncate max-w-[200px]"
+                          className="text-blue-400 hover:text-blue-300 transition-colors truncate max-w-50"
                         >
                           {user.profileUrl.replace(
                             "https://www.linkedin.com/in/",
@@ -252,7 +256,7 @@ function DashboardContent() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8">
+            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-125 flex flex-col items-center justify-center text-center p-8">
               <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
               <h3 className="text-xl font-medium text-white mb-2">
                 No Active Campaigns
@@ -266,10 +270,9 @@ function DashboardContent() {
         </div>
       </main>
 
-      {/* --- EDIT PROFILE MODAL --- */}
       <AnimatePresence>
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -352,7 +355,6 @@ function DashboardContent() {
         )}
       </AnimatePresence>
 
-      {/* --- CHAT WIDGET --- */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
         <AnimatePresence>
           {isChatOpen && (
@@ -361,9 +363,9 @@ function DashboardContent() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-[450px] h-[650px] rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
+              className="bg-[#111]/95 backdrop-blur-2xl border border-white/10 w-112.5 h-162.5 rounded-3xl shadow-2xl mb-4 flex flex-col overflow-hidden"
             >
-              <div className="p-4 border-b border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
+              <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-[#ea580c] rounded-full flex items-center justify-center">
                     <Bot size={16} className="text-white" />
