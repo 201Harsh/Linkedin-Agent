@@ -13,7 +13,6 @@ async function searchLinkedInTavily(query: string) {
       max_results: 3, // Keep this low for fast MVP testing
     });
 
-    // We only return the URL and content to save context window space
     return response.data.results.map((r: any) => ({
       url: r.url,
       content: r.content,
@@ -81,7 +80,6 @@ CRITICAL RULES:
       if (toolCall.function.name === "search_linkedin") {
         const args = JSON.parse(toolCall.function.arguments);
 
-        // Execute the actual Tavily API call
         const searchResults = await searchLinkedInTavily(args.search_query);
 
         messages.push({
