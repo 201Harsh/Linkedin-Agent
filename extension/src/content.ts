@@ -1,6 +1,6 @@
 console.log("[AgentX] Content Script injected successfully!");
 
-// --- 1. THE DIRECT DOM TAP (Runs on localhost:3000) ---
+// --- 1. THE DIRECT DOM TAP ---
 if (window.location.hostname === "localhost") {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
@@ -15,14 +15,44 @@ if (window.location.hostname === "localhost") {
 }
 
 // --- 2. RANDOMIZED HUMAN DELAY GENERATOR ---
-const humanPause = (min = 3000, max = 6000) => {
-  // Generates a random delay between min and max milliseconds
+const humanPause = (min = 2000, max = 5000) => {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- 3. THE LINKEDIN AUTOMATION (Runs on linkedin.com) ---
+// --- 3. THE SCOPED DOM HUNTER WITH CLIMBING ---
+const findElement = (scopeSelector: string, text: string) => {
+  const scope = document.querySelector(scopeSelector) || document.body;
+  // Broaden search to include generic elements that might contain the text
+  const elements = Array.from(
+    scope.querySelectorAll('button, [role="button"], span, div'),
+  );
+
+  const foundElement = elements.find((el) => {
+    const style = window.getComputedStyle(el);
+    const isVisible =
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      style.opacity !== "0";
+
+    // textContent grabs exact text, ignoring hidden HTML nodes
+    const elText = el.textContent || "";
+    return isVisible && elText.trim() === text;
+  }) as HTMLElement | undefined;
+
+  // CRITICAL FIX: If we found a span/div, climb the DOM tree to find the actual clickable button wrapper
+  if (foundElement) {
+    return (
+      (foundElement.closest('button, [role="button"]') as HTMLElement) ||
+      foundElement
+    );
+  }
+
+  return undefined;
+};
+
+// --- 4. THE LINKEDIN AUTOMATION ---
 chrome.runtime.onMessage.addListener(
   async (request: any, _sender: any, sendResponse: any) => {
     if (request.action === "PING_DOM") {
@@ -36,70 +66,79 @@ chrome.runtime.onMessage.addListener(
       console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
       try {
-        // Step 1: Wait for the page to fully render like a human reading the profile
-        await humanPause(2000, 4000);
+        await humanPause(2000, 4000); // Wait for the page to fully render
 
-        // Step 2: Find the main 'Connect' button (Strictly inside the main profile area, ignoring sidebars)
-        const mainArea = document.querySelector("main") || document.body;
-        const buttons = Array.from(mainArea.querySelectorAll("button"));
+        // --- PLAN A: Hunt in the Main Profile Area ---
+        let connectBtn = findElement("main", "Connect");
 
-        // Look for the exact "Connect" text
-        const connectBtn = buttons.find(
-          (btn) => btn.innerText.trim() === "Connect",
-        );
+        // --- PLAN B: Hunt in the 'More' Dropdown Menu ---
+        if (!connectBtn) {
+          console.log(
+            '[AgentX] Connect button hidden. Hunting in "More" menu...',
+          );
+          const moreBtn = findElement("main", "More");
 
+          if (moreBtn) {
+            moreBtn.click();
+            await humanPause(1500, 2500); // Wait for dropdown menu to animate
+
+            // Hunt strictly inside the opened dropdown menu
+            connectBtn = findElement(
+              ".artdeco-dropdown__content--is-open",
+              "Connect",
+            );
+          }
+        }
+
+        // --- PLAN C: Dead End ---
         if (!connectBtn) {
           console.warn(
-            "[AgentX] Connect button not found! They might be a 3rd degree connection or already connected.",
+            "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
           );
           return;
         }
 
-        console.log("[AgentX] Found Connect button. Clicking...");
+        console.log("[AgentX] Found Connect button! Clicking...");
         connectBtn.click();
 
-        // Step 3: Wait for the modal to pop up and load
-        await humanPause(3000, 5000);
+        await humanPause(2000, 4000); // Wait for the modal to pop up
 
-        // Step 4: Click 'Add a note'
-        const modalButtons = Array.from(document.querySelectorAll("button"));
-        const addNoteBtn = modalButtons.find((btn) =>
-          btn.innerText.includes("Add a note"),
-        );
+        // --- STEP 2: Hunt in the Pop-up Modal ---
+        const addNoteBtn = findElement(".artdeco-modal", "Add a note");
 
         if (addNoteBtn) {
           console.log("[AgentX] Clicking Add Note...");
           addNoteBtn.click();
-          await humanPause(2000, 3500);
+          await humanPause(1500, 2500);
+        } else {
+          console.log(
+            '[AgentX] "Add a note" button not found, modal might have skipped directly to message input.',
+          );
         }
 
-        // Step 5: Type the personalized message
+        // --- STEP 3: Type and Send ---
         const textarea = document.querySelector(
           'textarea[name="message"], textarea#custom-message',
         ) as HTMLTextAreaElement;
+
         if (textarea) {
           console.log("[AgentX] Typing personalized message...");
           textarea.value = request.note;
-
-          // Dispatch React events so LinkedIn knows we typed
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
-          // Wait like a human re-reading their message before sending
-          await humanPause(4000, 7000);
+          await humanPause(3000, 6000); // Proofread like a human
 
-          // Step 6: Click Send (LIVE EXECUTION)
-          const finalButtons = Array.from(document.querySelectorAll("button"));
-          const sendBtn = finalButtons.find(
-            (btn) => btn.innerText.trim() === "Send",
-          );
-
+          // Scope to the modal to find the final Send button
+          const sendBtn = findElement(".artdeco-modal", "Send");
           if (sendBtn) {
             console.log("[AgentX] Clicking Send!");
             sendBtn.click();
             console.log("[AgentX] ✅ Target successfully engaged.");
           } else {
-            console.warn("[AgentX] Send button not found.");
+            console.warn("[AgentX] Send button not found in modal.");
           }
+        } else {
+          console.warn("[AgentX] Text area not found in modal.");
         }
       } catch (error) {
         console.error("[AgentX] Automation failed:", error);

@@ -233,7 +233,7 @@ function DashboardContent() {
 
           <div className="lg:col-span-2">
             {/* REAL-TIME ANIMATED QUEUE UI */}
-            <div className="bg-[#111]/40 border border-white/5 rounded-3xl h-full min-h-[500px] flex flex-col p-8 overflow-hidden relative">
+            <div className="bg-[#111]/40 border border-white/5 rounded-3xl h-full max-h-190 flex flex-col p-8 overflow-hidden relative scrollbar-small">
               <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
                 <Bot size={20} className="text-[#ea580c]" /> Live Execution Feed
               </h3>
