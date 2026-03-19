@@ -1,10 +1,8 @@
 console.log("AgentX Background worker initialized.");
 
-// 1. Listen for the token coming from the Direct DOM Tap
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "SAVE_AUTH_TOKEN") {
     chrome.storage.local.get("agentx_token", (res) => {
-      // Only log and save if it's a new token (prevents log spam)
       if (res.agentx_token !== request.token) {
         chrome.storage.local.set({ agentx_token: request.token }, () => {
           console.log(
@@ -16,7 +14,6 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 });
 
-// 2. The Authorized Polling Loop
 setInterval(async () => {
   try {
     const storage = await chrome.storage.local.get("agentx_token");
