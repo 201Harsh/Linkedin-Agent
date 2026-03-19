@@ -73,7 +73,7 @@ export const RefreshAccessToken = async (
       process.env.JWT_REFRESH_SECRET as string,
     ) as { id: string };
 
-    const user = await UserModel.findById(decoded.id);
+    const user = await UserModel.findById(decoded.id).select("+refreshToken");
 
     if (!user || user.refreshToken !== refreshToken) {
       res
