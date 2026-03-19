@@ -8,9 +8,8 @@ import {
   X,
   MessageSquare,
   Link as LinkIcon,
-  Copy,
-  CheckCircle2,
   Sparkles,
+  Server,
 } from "lucide-react";
 import AxiosInstance from "@/config/AxiosInstance";
 import ReactMarkdown from "react-markdown";
@@ -21,33 +20,21 @@ interface Message {
   text: string;
 }
 
+// Cleaned up LeadCard with NO buttons - fully automated UI
 const LeadCard = ({
   lead,
 }: {
   lead: { name: string; url: string; note: string };
 }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleConnect = async () => {
-    await navigator.clipboard.writeText(lead.note);
-    setCopied(true);
-    window.open(lead.url, "_blank");
-    setTimeout(() => setCopied(false), 3000);
-  };
-
   return (
     <div className="bg-[#050505] border border-white/10 rounded-xl p-4 mb-3 last:mb-0 shadow-lg relative overflow-hidden group">
       <div className="flex justify-between items-start mb-2">
         <h4 className="text-white font-semibold text-sm truncate pr-4">
           {lead.name}
         </h4>
-        <button
-          onClick={handleConnect}
-          className="bg-[#ea580c]/10 hover:bg-[#ea580c]/20 text-[#ea580c] border border-[#ea580c]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap"
-        >
-          {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-          {copied ? "Copied & Opened!" : "1-Click Connect"}
-        </button>
+        <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase flex items-center gap-1">
+          <Server size={10} /> Auto-Queued
+        </span>
       </div>
       <div className="bg-[#111] p-3 rounded-lg border border-white/5">
         <p className="text-gray-400 text-xs italic">"{lead.note}"</p>
@@ -64,7 +51,7 @@ export default function ChatWidget() {
     {
       id: "welcome-msg",
       role: "agent",
-      text: "AgentX online. I have analyzed your profile. Who are we targeting today, or do you need me to review your bio?",
+      text: "AgentX online. Tell me who to find, and I will automatically queue them for background connection.",
     },
   ]);
 
@@ -90,13 +77,39 @@ export default function ChatWidget() {
 
     try {
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
+      const aiText = response.data.response;
+
+      // --- ZERO CLICK HANDOFF LOGIC ---
+      // We parse the JSON immediately. If leads exist, we POST them to the backend silently.
+      const codeBlockMarker = "```";
+      const regex = new RegExp(
+        codeBlockMarker + "(?:json)?\\s*([\\s\\S]*?)\\s*" + codeBlockMarker,
+      );
+      const jsonMatch = aiText.match(regex);
+
+      if (jsonMatch) {
+        try {
+          const data = JSON.parse(jsonMatch[1]);
+          if (data.leads && Array.isArray(data.leads)) {
+            // Push all leads to the backend queue asynchronously
+            await Promise.all(
+              data.leads.map((lead: any) =>
+                AxiosInstance.post("/users/campaigns/queue", {
+                  name: lead.name,
+                  url: lead.url,
+                  note: lead.note,
+                }).catch((e) => console.error("Failed to auto-queue:", e)),
+              ),
+            );
+          }
+        } catch (e) {
+          console.error("Zero-click parsing failed:", e);
+        }
+      }
+
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now().toString(),
-          role: "agent",
-          text: response.data.response,
-        },
+        { id: Date.now().toString(), role: "agent", text: aiText },
       ]);
     } catch (error) {
       setMessages((prev) => [
@@ -104,7 +117,7 @@ export default function ChatWidget() {
         {
           id: Date.now().toString(),
           role: "agent",
-          text: "⚠️ Connection to AgentX lost. Please check your network or API keys.",
+          text: "⚠️ Connection to AgentX lost. Please check network.",
         },
       ]);
     } finally {
@@ -125,8 +138,8 @@ export default function ChatWidget() {
         if (data.leads && Array.isArray(data.leads)) {
           return (
             <div className="mt-1">
-              <p className="text-[#ea580c] text-xs font-bold mb-3 tracking-wider uppercase flex items-center gap-1.5">
-                <Sparkles size={12} /> Targets Acquired
+              <p className="text-emerald-500 text-xs font-bold mb-3 tracking-wider uppercase flex items-center gap-1.5">
+                <Server size={12} /> Successfully Queued to Dashboard
               </p>
               {data.leads.map((lead: any, idx: number) => (
                 <LeadCard key={idx} lead={lead} />
@@ -135,8 +148,7 @@ export default function ChatWidget() {
           );
         }
       } catch (e) {
-        console.error("Failed to parse Agent JSON", e);
-        // If parsing fails, fall through to normal markdown render
+        /* Fallback to markdown */
       }
     }
 
@@ -147,7 +159,7 @@ export default function ChatWidget() {
             <a
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 underline-offset-2 transition-colors font-medium flex items-center gap-1"
+              className="text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1 inline-flex"
               {...props}
             >
               {props.children} <LinkIcon size={10} />
@@ -194,7 +206,6 @@ export default function ChatWidget() {
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
             className="bg-[#111]/95 backdrop-blur-3xl border border-white/10 w-100 h-150 sm:w-112.5 sm:h-162.5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] mb-6 flex flex-col overflow-hidden"
           >
-            {/* Header */}
             <div className="p-4 border-b border-white/10 bg-linear-to-r from-[#1a1a1a] to-[#ea580c]/15 flex justify-between items-center shadow-sm z-10">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-linear-to-br from-[#ea580c] to-[#c2410c] rounded-full flex items-center justify-center shadow-inner">
@@ -220,7 +231,6 @@ export default function ChatWidget() {
               </button>
             </div>
 
-            {/* Chat Area */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5 flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               <AnimatePresence initial={false}>
                 {messages.map((msg) => (
@@ -233,13 +243,8 @@ export default function ChatWidget() {
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${
-                        msg.role === "user"
-                          ? "bg-linear-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm"
-                          : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm w-full"
-                      }`}
+                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${msg.role === "user" ? "bg-linear-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm" : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm w-full"}`}
                     >
-                      {/* --- EXECUTE THE PARSER --- */}
                       {msg.role === "user"
                         ? msg.text
                         : renderMessageContent(msg.text)}
@@ -247,8 +252,6 @@ export default function ChatWidget() {
                   </motion.div>
                 ))}
               </AnimatePresence>
-
-              {/* Typing Indicator */}
               {isTyping && (
                 <motion.div
                   layout
@@ -293,7 +296,6 @@ export default function ChatWidget() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Suggestions & Input Area */}
             <div className="px-4 py-3 flex gap-2 overflow-x-auto border-t border-white/5 bg-[#0a0a0a]/50 scrollbar-hide">
               {suggestions.map((suggestion, idx) => (
                 <button
@@ -343,7 +345,6 @@ export default function ChatWidget() {
         )}
       </AnimatePresence>
 
-      {/* Floating Toggle Button */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}

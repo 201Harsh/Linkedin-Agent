@@ -15,6 +15,8 @@ import {
   Linkedin,
   Edit2,
   Save,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import AxiosInstance, { setAccessToken } from "@/config/AxiosInstance";
 import ChatWidget from "../Components/ChatWidget";
@@ -25,6 +27,9 @@ function DashboardContent() {
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Real-time Campaign Queue State
+  const [queue, setQueue] = useState<any[]>([]);
 
   // Edit Profile State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -71,6 +76,25 @@ function DashboardContent() {
 
     fetchUserData();
   }, [searchParams, router]);
+
+  // Poll the backend every 5 seconds to update the Campaign UI animations
+  useEffect(() => {
+    const fetchQueue = async () => {
+      try {
+        // You will need to create this route to return all items in the queue
+        const res = await AxiosInstance.get("/users/campaigns/queue/status");
+        if (res.data && res.data.queue) {
+          setQueue(res.data.queue);
+        }
+      } catch (error) {
+        // Silently fail if backend route isn't ready yet
+      }
+    };
+
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +143,7 @@ function DashboardContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
-            {/* --- PROFILE CARD --- */}
+            {/* PROFILE CARD */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
               <button
                 onClick={() => setIsEditModalOpen(true)}
@@ -148,7 +172,6 @@ function DashboardContent() {
                   <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
                     {user.name}
                   </h2>
-
                   <p className="text-gray-300 text-sm mt-2 leading-relaxed font-light">
                     {user.headline === "AgentX User"
                       ? "Click edit to add your headline."
@@ -160,7 +183,6 @@ function DashboardContent() {
                       <MapPin size={14} className="text-[#ea580c]" />
                       <span>{user.location || "Not Specified"}</span>
                     </div>
-
                     <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
                       <Users size={14} className="text-[#ea580c]" />
                       <span>
@@ -172,33 +194,6 @@ function DashboardContent() {
                         Connections
                       </span>
                     </div>
-
-                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
-                      <Mail size={14} className="text-[#ea580c]" />
-                      <a
-                        href={`mailto:${user.email}`}
-                        className="text-blue-400 hover:text-blue-300 transition-colors truncate"
-                      >
-                        {user.email}
-                      </a>
-                    </div>
-
-                    {user.profileUrl && (
-                      <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
-                        <Linkedin size={14} className="text-[#ea580c]" />
-                        <a
-                          href={user.profileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 transition-colors truncate max-w-[200px]"
-                        >
-                          {user.profileUrl.replace(
-                            "https://www.linkedin.com/in/",
-                            "linkedin.com/in/",
-                          )}
-                        </a>
-                      </div>
-                    )}
                   </div>
 
                   <div className="mt-5">
@@ -210,18 +205,26 @@ function DashboardContent() {
               </div>
             </div>
 
+            {/* CAMPAIGN STATUS SUMMARY */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl">
               <h3 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
-                <Activity size={16} /> Campaign Status
+                <Activity size={16} /> Automation Overview
               </h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400">Requests Sent (Today)</span>
-                    <span className="text-white font-medium">0 / 50</span>
+                    <span className="text-gray-400">Total Sent (Today)</span>
+                    <span className="text-white font-medium">
+                      {queue.filter((q) => q.status === "sent").length} / 50
+                    </span>
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-1.5">
-                    <div className="bg-[#ea580c] h-1.5 rounded-full w-[0%]"></div>
+                    <div
+                      className="bg-[#ea580c] h-1.5 rounded-full transition-all duration-1000"
+                      style={{
+                        width: `${(queue.filter((q) => q.status === "sent").length / 50) * 100}%`,
+                      }}
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -229,24 +232,68 @@ function DashboardContent() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="bg-[#111]/40 border border-white/5 border-dashed rounded-3xl h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8">
-              <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">
-                No Active Campaigns
+            {/* REAL-TIME ANIMATED QUEUE UI */}
+            <div className="bg-[#111]/40 border border-white/5 rounded-3xl h-full min-h-[500px] flex flex-col p-8 overflow-hidden relative">
+              <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                <Bot size={20} className="text-[#ea580c]" /> Live Execution Feed
               </h3>
-              <p className="text-gray-500 text-sm max-w-md font-light">
-                Open the AgentX chatbot in the bottom right to start searching
-                for targets and initiating your automated outreach.
-              </p>
+
+              {queue.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center">
+                  <Sparkles size={48} className="text-[#ea580c]/40 mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2">
+                    Awaiting Commands
+                  </h3>
+                  <p className="text-gray-500 text-sm max-w-md font-light">
+                    Ask AgentX to find leads. They will automatically queue here
+                    and be executed by your Chrome Extension.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                  <AnimatePresence>
+                    {queue.map((lead, idx) => (
+                      <motion.div
+                        key={lead._id || idx}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-[#1a1a1a] border border-white/10 rounded-xl p-4 flex justify-between items-center"
+                      >
+                        <div>
+                          <h4 className="text-white text-sm font-medium">
+                            {lead.name}
+                          </h4>
+                          <p className="text-xs text-gray-500 truncate max-w-[300px]">
+                            "{lead.note}"
+                          </p>
+                        </div>
+
+                        {lead.status === "pending" ? (
+                          <div className="flex items-center gap-1.5 bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-full border border-yellow-500/20 text-xs font-medium">
+                            <Clock size={12} className="animate-spin-slow" />{" "}
+                            Pending Extension
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full border border-emerald-500/20 text-xs font-medium">
+                            <CheckCircle2 size={12} /> Sent
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
 
-      {/* --- EDIT PROFILE MODAL --- */}
+      {/* EDIT MODAL REMAINS UNCHANGED... */}
       <AnimatePresence>
         {isEditModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            {/* ... Your exact modal code ... */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -259,11 +306,9 @@ function DashboardContent() {
               >
                 <X size={20} />
               </button>
-
               <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                 <Edit2 size={18} className="text-[#ea580c]" /> Complete Profile
               </h2>
-
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">
@@ -325,8 +370,6 @@ function DashboardContent() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* --- MOUNT THE ISOLATED CHAT WIDGET --- */}
       <ChatWidget />
     </div>
   );
