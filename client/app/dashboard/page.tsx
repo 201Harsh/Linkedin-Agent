@@ -81,8 +81,7 @@ function DashboardContent() {
         if (res.data && res.data.queue) {
           setQueue(res.data.queue);
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     };
 
     fetchQueue();
@@ -158,6 +157,10 @@ function DashboardContent() {
                     }
                     alt="Profile"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=200&auto=format&fit=crop";
+                    }}
                   />
                 </div>
 

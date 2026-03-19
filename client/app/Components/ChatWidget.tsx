@@ -20,7 +20,6 @@ interface Message {
   text: string;
 }
 
-// Cleaned up LeadCard with NO buttons - fully automated UI
 const LeadCard = ({
   lead,
 }: {
@@ -79,7 +78,6 @@ export default function ChatWidget() {
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
       const aiText = response.data.response;
 
-      // --- ZERO CLICK HANDOFF LOGIC ---
       // We parse the JSON immediately. If leads exist, we POST them to the backend silently.
       const codeBlockMarker = "```";
       const regex = new RegExp(
@@ -91,7 +89,6 @@ export default function ChatWidget() {
         try {
           const data = JSON.parse(jsonMatch[1]);
           if (data.leads && Array.isArray(data.leads)) {
-            // Push all leads to the backend queue asynchronously
             await Promise.all(
               data.leads.map((lead: any) =>
                 AxiosInstance.post("/users/campaigns/queue", {
@@ -148,7 +145,6 @@ export default function ChatWidget() {
           );
         }
       } catch (e) {
-        /* Fallback to markdown */
       }
     }
 
@@ -159,7 +155,7 @@ export default function ChatWidget() {
             <a
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1 inline-flex"
+              className="text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1"
               {...props}
             >
               {props.children} <LinkIcon size={10} />
