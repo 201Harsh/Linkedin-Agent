@@ -222,6 +222,23 @@ function DashboardContent() {
                     ></div>
                   </div>
                 </div>
+
+                <div className="pt-2">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-gray-400">AI Brain Requests</span>
+                    <span className="text-white font-medium">
+                      {user.dailyAiRequests || 0} / 50
+                    </span>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-1.5">
+                    <div
+                      className="bg-[#ea580c] h-1.5 rounded-full transition-all duration-1000"
+                      style={{
+                        width: `${((user.dailyAiRequests || 0) / 50) * 100}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -259,7 +276,7 @@ function DashboardContent() {
                             {lead.name}
                           </h4>
                           <p className="text-xs text-gray-500 truncate max-w-75">
-                            "{lead.note}"
+                            '{lead.note}'
                           </p>
                         </div>
 
@@ -362,7 +379,7 @@ function DashboardContent() {
           </div>
         )}
       </AnimatePresence>
-      <ChatWidget />
+      <ChatWidget user={user} />
     </div>
   );
 }
