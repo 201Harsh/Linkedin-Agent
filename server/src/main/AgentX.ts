@@ -23,7 +23,13 @@ async function searchLinkedInTavily(query: string) {
   }
 }
 
-export async function AgentX({ prompt, user }: { prompt: string; user: any }) {
+export async function AgentX({
+  user,
+  chatHistory,
+}: {
+  user: any;
+  chatHistory: any[];
+}) {
   const MODEL_NAME = "llama-3.1-8b-instant";
 
   const messages: any[] = [
@@ -38,9 +44,9 @@ CRITICAL RULES:
 1. THE SEARCH PROTOCOL: IF the user asks to find, connect with, or search for people, HRs, startups, or companies:
    - YOU MUST use the 'search_linkedin' tool. IT IS YOUR ONLY TOOL.
    - NEVER invent or use tools like 'brave_search' or 'echo'. 
-   - ABSOLUTELY NO XML TAGS. Do NOT output raw <function> tags.
+   - ABSOLUTELY NO XML TAGS. Do NOT output raw tags.
    - You MUST output the final result ONLY as a JSON code block. No intro text, no outro text.
-   - The JSON must match this exact structure:
+   - The JSON must match this exact structure (using double quotes for valid JSON parsing):
    \`\`\`json
    {
      "leads": [
@@ -49,15 +55,21 @@ CRITICAL RULES:
    }
    \`\`\`
 
-2. THE ADVICE PROTOCOL: IF the user asks for profile advice (e.g., "Optimize my bio"):
+2. THE ADVICE PROTOCOL: IF the user asks for profile advice:
    - DO NOT use the search tool.
    - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.`,
     },
-    {
-      role: "user",
-      content: prompt,
-    },
   ];
+
+  // Map the database chat history into the Groq message array
+  if (chatHistory && chatHistory.length > 0) {
+    chatHistory.forEach((msg) => {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      });
+    });
+  }
 
   const completion = await groq.chat.completions.create({
     model: MODEL_NAME,
@@ -69,14 +81,14 @@ CRITICAL RULES:
         function: {
           name: "search_linkedin",
           description:
-            "Searches the web for LinkedIn profiles and companies. Use this for ANY internet search request, including startups, HRs, or specific people.",
+            "Searches the web for LinkedIn profiles. Use this for ANY internet search request.",
           parameters: {
             type: "object",
             properties: {
               search_query: {
                 type: "string",
                 description:
-                  'The Google Dork query. Format: site:linkedin.com/in/ "Target" AND "Location" OR site:linkedin.com/company/ "Company"',
+                  "The Google Dork query. Format: site:linkedin.com/in/ target location",
               },
             },
             required: ["search_query"],

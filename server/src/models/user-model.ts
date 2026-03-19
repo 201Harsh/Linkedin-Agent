@@ -13,8 +13,10 @@ export interface IUser extends MongooseDoc {
   headline?: string;
   location?: string;
   connections?: number;
-  profileUrl?: string; // <-- NEW: Directly from the /identityMe API
+  profileUrl?: string;
   refreshToken?: string;
+  dailyAiRequests: number; 
+  lastAiRequestDate: Date;
   createAccessToken: () => string;
   createRefreshToken: () => string;
 }
@@ -30,6 +32,8 @@ const userSchema = new MongooseSchema<IUser>(
     connections: { type: Number, default: 0 },
     profileUrl: { type: String, default: "" },
     refreshToken: { type: String, select: false },
+    dailyAiRequests: { type: Number, default: 0 }, // <-- NEW
+    lastAiRequestDate: { type: Date, default: Date.now }, // <-- NEW
   },
   { timestamps: true },
 );

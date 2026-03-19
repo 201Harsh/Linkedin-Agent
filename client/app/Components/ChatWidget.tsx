@@ -36,16 +36,17 @@ const LeadCard = ({
         </span>
       </div>
       <div className="bg-[#111] p-3 rounded-lg border border-white/5">
-        <p className="text-gray-400 text-xs italic">"{lead.note}"</p>
+        <p className="text-gray-400 text-xs italic">'{lead.note}'</p>
       </div>
     </div>
   );
 };
 
-export default function ChatWidget() {
+export default function ChatWidget({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [aiCount, setAiCount] = useState(user?.dailyAiRequests || 0);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-msg",
@@ -60,6 +61,30 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  // Fetch Chat History on mount
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const res = await AxiosInstance.get("/ai/chats");
+        if (res.data && res.data.chats && res.data.chats.length > 0) {
+          const history = res.data.chats.map((c: any) => ({
+            id: c._id,
+            role: c.role === "assistant" ? "agent" : "user",
+            text: c.content,
+          }));
+
+          setMessages((prev) => {
+            // Keep the welcome message, append the DB history
+            return [prev[0], ...history];
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load chat history:", error);
+      }
+    };
+    fetchChats();
+  }, []);
+
   const suggestions = [
     "Find Web Dev HRs",
     "List Tech Startups in BLR",
@@ -67,18 +92,18 @@ export default function ChatWidget() {
   ];
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || aiCount >= 50) return;
 
     const userMsgId = Date.now().toString();
     setMessages((prev) => [...prev, { id: userMsgId, role: "user", text }]);
     setInput("");
     setIsTyping(true);
+    setAiCount((prev: number) => prev + 1); // Optimistically increment limit
 
     try {
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
       const aiText = response.data.response;
 
-      // We parse the JSON immediately. If leads exist, we POST them to the backend silently.
       const codeBlockMarker = "```";
       const regex = new RegExp(
         codeBlockMarker + "(?:json)?\\s*([\\s\\S]*?)\\s*" + codeBlockMarker,
@@ -144,8 +169,7 @@ export default function ChatWidget() {
             </div>
           );
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
     return (
@@ -214,7 +238,7 @@ export default function ChatWidget() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
                     <span className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">
-                      Autonomous Mode
+                      Auto Mode • {aiCount}/50 Requests
                     </span>
                   </div>
                 </div>
@@ -297,7 +321,7 @@ export default function ChatWidget() {
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(suggestion)}
-                  disabled={isTyping}
+                  disabled={isTyping || aiCount >= 50}
                   className="whitespace-nowrap bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs px-4 py-2 rounded-full transition-all disabled:opacity-50"
                 >
                   {suggestion}
@@ -317,19 +341,23 @@ export default function ChatWidget() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  disabled={isTyping}
-                  placeholder="Command AgentX..."
+                  disabled={isTyping || aiCount >= 50}
+                  placeholder={
+                    aiCount >= 50
+                      ? "Daily limit reached (50/50)"
+                      : "Command AgentX..."
+                  }
                   className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors disabled:opacity-50 shadow-inner"
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || isTyping}
+                  disabled={!input.trim() || isTyping || aiCount >= 50}
                   className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md"
                 >
                   <Send
                     size={16}
                     className={
-                      input.trim() && !isTyping
+                      input.trim() && !isTyping && aiCount < 50
                         ? "translate-x-0.5 -translate-y-0.5 transition-transform"
                         : ""
                     }
