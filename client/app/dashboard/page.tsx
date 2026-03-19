@@ -11,8 +11,6 @@ import {
   Loader2,
   MapPin,
   Users,
-  Mail,
-  Linkedin,
   Edit2,
   Save,
   Clock,
@@ -28,7 +26,6 @@ function DashboardContent() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Real-time Campaign Queue State
   const [queue, setQueue] = useState<any[]>([]);
 
   // Edit Profile State
@@ -77,17 +74,14 @@ function DashboardContent() {
     fetchUserData();
   }, [searchParams, router]);
 
-  // Poll the backend every 5 seconds to update the Campaign UI animations
   useEffect(() => {
     const fetchQueue = async () => {
       try {
-        // You will need to create this route to return all items in the queue
         const res = await AxiosInstance.get("/users/campaigns/queue/status");
         if (res.data && res.data.queue) {
           setQueue(res.data.queue);
         }
       } catch (error) {
-        // Silently fail if backend route isn't ready yet
       }
     };
 
@@ -143,7 +137,6 @@ function DashboardContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
-            {/* PROFILE CARD */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
               <button
                 onClick={() => setIsEditModalOpen(true)}
@@ -152,8 +145,8 @@ function DashboardContent() {
                 <Edit2 size={14} className="text-gray-300" />
               </button>
 
-              <div className="h-32 bg-gradient-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+              <div className="h-32 bg-linear-to-br from-[#1a1a1a] to-[#ea580c]/20 relative">
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-size-[20px_20px]"></div>
               </div>
 
               <div className="relative px-8 pb-8">
@@ -205,7 +198,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* CAMPAIGN STATUS SUMMARY */}
             <div className="bg-[#111]/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl">
               <h3 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
                 <Activity size={16} /> Automation Overview
@@ -232,7 +224,6 @@ function DashboardContent() {
           </div>
 
           <div className="lg:col-span-2">
-            {/* REAL-TIME ANIMATED QUEUE UI */}
             <div className="bg-[#111]/40 border border-white/5 rounded-3xl h-full max-h-190 flex flex-col p-8 overflow-hidden relative scrollbar-small">
               <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
                 <Bot size={20} className="text-[#ea580c]" /> Live Execution Feed
@@ -264,7 +255,7 @@ function DashboardContent() {
                           <h4 className="text-white text-sm font-medium">
                             {lead.name}
                           </h4>
-                          <p className="text-xs text-gray-500 truncate max-w-[300px]">
+                          <p className="text-xs text-gray-500 truncate max-w-75">
                             "{lead.note}"
                           </p>
                         </div>
@@ -289,11 +280,9 @@ function DashboardContent() {
         </div>
       </main>
 
-      {/* EDIT MODAL REMAINS UNCHANGED... */}
       <AnimatePresence>
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            {/* ... Your exact modal code ... */}
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

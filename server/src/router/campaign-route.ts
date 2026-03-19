@@ -8,7 +8,6 @@ import AuthMiddleware from "../middlewares/auth-middleware.js";
 
 const campaignRouter = Router();
 
-// 100% Startup Grade: EVERYTHING is protected.
 campaignRouter.use(AuthMiddleware);
 
 campaignRouter.post("/queue", queueLead);

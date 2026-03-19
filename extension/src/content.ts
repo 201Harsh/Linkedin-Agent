@@ -1,6 +1,5 @@
 console.log("[AgentX] Content Script injected successfully!");
 
-// --- 1. THE DIRECT DOM TAP ---
 if (window.location.hostname === "localhost") {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
@@ -14,17 +13,14 @@ if (window.location.hostname === "localhost") {
   }, 2000);
 }
 
-// --- 2. RANDOMIZED HUMAN DELAY GENERATOR ---
 const humanPause = (min = 2000, max = 5000) => {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- 3. THE SCOPED DOM HUNTER WITH CLIMBING ---
 const findElement = (scopeSelector: string, text: string) => {
   const scope = document.querySelector(scopeSelector) || document.body;
-  // Broaden search to include generic elements that might contain the text
   const elements = Array.from(
     scope.querySelectorAll('button, [role="button"], span, div'),
   );
@@ -36,12 +32,10 @@ const findElement = (scopeSelector: string, text: string) => {
       style.visibility !== "hidden" &&
       style.opacity !== "0";
 
-    // textContent grabs exact text, ignoring hidden HTML nodes
     const elText = el.textContent || "";
     return isVisible && elText.trim() === text;
   }) as HTMLElement | undefined;
 
-  // CRITICAL FIX: If we found a span/div, climb the DOM tree to find the actual clickable button wrapper
   if (foundElement) {
     return (
       (foundElement.closest('button, [role="button"]') as HTMLElement) ||
@@ -52,7 +46,6 @@ const findElement = (scopeSelector: string, text: string) => {
   return undefined;
 };
 
-// --- 4. THE LINKEDIN AUTOMATION ---
 chrome.runtime.onMessage.addListener(
   async (request: any, _sender: any, sendResponse: any) => {
     if (request.action === "PING_DOM") {
@@ -68,10 +61,8 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(2000, 4000); // Wait for the page to fully render
 
-        // --- PLAN A: Hunt in the Main Profile Area ---
         let connectBtn = findElement("main", "Connect");
 
-        // --- PLAN B: Hunt in the 'More' Dropdown Menu ---
         if (!connectBtn) {
           console.log(
             '[AgentX] Connect button hidden. Hunting in "More" menu...',
@@ -82,7 +73,6 @@ chrome.runtime.onMessage.addListener(
             moreBtn.click();
             await humanPause(1500, 2500); // Wait for dropdown menu to animate
 
-            // Hunt strictly inside the opened dropdown menu
             connectBtn = findElement(
               ".artdeco-dropdown__content--is-open",
               "Connect",
@@ -90,7 +80,6 @@ chrome.runtime.onMessage.addListener(
           }
         }
 
-        // --- PLAN C: Dead End ---
         if (!connectBtn) {
           console.warn(
             "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
@@ -103,7 +92,6 @@ chrome.runtime.onMessage.addListener(
 
         await humanPause(2000, 4000); // Wait for the modal to pop up
 
-        // --- STEP 2: Hunt in the Pop-up Modal ---
         const addNoteBtn = findElement(".artdeco-modal", "Add a note");
 
         if (addNoteBtn) {
@@ -116,7 +104,6 @@ chrome.runtime.onMessage.addListener(
           );
         }
 
-        // --- STEP 3: Type and Send ---
         const textarea = document.querySelector(
           'textarea[name="message"], textarea#custom-message',
         ) as HTMLTextAreaElement;
@@ -128,7 +115,6 @@ chrome.runtime.onMessage.addListener(
 
           await humanPause(3000, 6000); // Proofread like a human
 
-          // Scope to the modal to find the final Send button
           const sendBtn = findElement(".artdeco-modal", "Send");
           if (sendBtn) {
             console.log("[AgentX] Clicking Send!");

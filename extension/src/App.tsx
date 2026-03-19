@@ -5,7 +5,6 @@ export default function App() {
 
   const checkProfile = async () => {
     setStatus("Scanning...");
-    // We will add the content script trigger here next
     setTimeout(() => setStatus("Ready to Connect"), 1000);
   };
 

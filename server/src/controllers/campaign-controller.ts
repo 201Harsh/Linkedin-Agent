@@ -1,11 +1,10 @@
 import { Request, Response } from "express";
 import { CampaignModel } from "../models/campaign-model.js";
 
-// 1. POST: Dashboard pushes a new lead to the database
 export const queueLead = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, url, note } = req.body;
-    const userId = (req as any).user.id; // Using your auth middleware's user ID
+    const userId = (req as any).user.id;
 
     const newLead = await CampaignModel.create({
       userId,
@@ -22,7 +21,6 @@ export const queueLead = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// 2. GET: Dashboard gets all leads to show in the UI Animation
 export const getQueueStatus = async (
   req: Request,
   res: Response,
@@ -30,7 +28,6 @@ export const getQueueStatus = async (
   try {
     const userId = (req as any).user.id;
 
-    // Fetch all campaigns for this user, newest first
     const queue = await CampaignModel.find({ userId }).sort({ createdAt: -1 });
 
     res.status(200).json({ queue });
@@ -40,16 +37,14 @@ export const getQueueStatus = async (
   }
 };
 
-// 3. GET: Chrome Extension silently pulls the next lead to execute
 export const getNextLead = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const userId = (req as any).user.id; // Extracted safely from AuthMiddleware
+    const userId = (req as any).user.id;
 
-    // Atomic execution: Find oldest pending lead FOR THIS EXACT USER and mark as sent
-    const nextLead = await CampaignModel.findOneAndUpdate(
+    const nextLead = await CampaignModel.findOneAndReplace(
       { userId, status: "pending" },
       { status: "sent" },
       { new: true, sort: { createdAt: 1 } },

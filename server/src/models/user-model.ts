@@ -28,13 +28,12 @@ const userSchema = new MongooseSchema<IUser>(
     headline: { type: String, default: "AgentX User" },
     location: { type: String, default: "Not Specified" },
     connections: { type: Number, default: 0 },
-    profileUrl: { type: String, default: "" }, // <-- Added
+    profileUrl: { type: String, default: "" },
     refreshToken: { type: String, select: false },
   },
   { timestamps: true },
 );
 
-// Access Token
 userSchema.methods.createAccessToken = function () {
   const options: jwt.SignOptions = {
     expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || "15m") as any,
@@ -42,7 +41,6 @@ userSchema.methods.createAccessToken = function () {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET as string, options);
 };
 
-// Refresh Token
 userSchema.methods.createRefreshToken = function () {
   const options: jwt.SignOptions = {
     expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || "7d") as any,

@@ -68,13 +68,11 @@ export const RefreshAccessToken = async (
       return;
     }
 
-    // 2. Verify the refresh token
     const decoded = jwt.verify(
       refreshToken,
       process.env.JWT_REFRESH_SECRET as string,
     ) as { id: string };
 
-    // 3. Find the user and verify the token hasn't been revoked
     const user = await UserModel.findById(decoded.id);
 
     if (!user || user.refreshToken !== refreshToken) {
@@ -84,10 +82,8 @@ export const RefreshAccessToken = async (
       return;
     }
 
-    // 4. Generate a brand new Access Token
     const newAccessToken = user.createAccessToken();
 
-    // 5. Send it back to the frontend
     res.status(200).json({ accessToken: newAccessToken });
     return;
   } catch (error: any) {
