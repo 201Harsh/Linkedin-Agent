@@ -10,7 +10,7 @@ async function searchLinkedInTavily(query: string) {
       api_key: process.env.TAVILY_API_KEY,
       query: query,
       search_depth: "basic",
-      max_results: 4,
+      max_results: 3,
     });
 
     return response.data.results.map((r: any) => ({
