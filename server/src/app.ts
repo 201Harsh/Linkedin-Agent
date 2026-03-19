@@ -6,6 +6,7 @@ import passport from "passport";
 import "./lib/passport.js"; 
 import UserRouter from "./router/user-route.js";
 import aiRouter from "./router/ai-router.js";
+import campaignRouter from "./router/campaign-route.js";
 
 const app = express();
 
@@ -33,5 +34,6 @@ app.use(passport.session());
 
 app.use("/users", UserRouter);
 app.use("/ai", aiRouter);
+app.use('/users/campaigns', campaignRouter);
 
 export default app;
