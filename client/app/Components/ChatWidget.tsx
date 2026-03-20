@@ -56,12 +56,12 @@ export default function ChatWidget({ user }: { user: any }) {
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  // Fetch Chat History on mount
   useEffect(() => {
     const fetchChats = async () => {
       try {
@@ -74,7 +74,6 @@ export default function ChatWidget({ user }: { user: any }) {
           }));
 
           setMessages((prev) => {
-            // Keep the welcome message, append the DB history
             return [prev[0], ...history];
           });
         }
@@ -91,14 +90,36 @@ export default function ChatWidget({ user }: { user: any }) {
     "Optimize Bio",
   ];
 
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isTyping && aiCount < 50) {
+        handleSendMessage(input);
+      }
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || aiCount >= 50) return;
 
     const userMsgId = Date.now().toString();
     setMessages((prev) => [...prev, { id: userMsgId, role: "user", text }]);
+
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
     setIsTyping(true);
-    setAiCount((prev: number) => prev + 1); // Optimistically increment limit
+    setAiCount((prev: number) => prev + 1);
 
     try {
       const response = await AxiosInstance.post("/ai/agentx", { prompt: text });
@@ -265,9 +286,11 @@ export default function ChatWidget({ user }: { user: any }) {
                     <div
                       className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-[14px] font-light leading-relaxed shadow-sm ${msg.role === "user" ? "bg-linear-to-br from-[#ea580c] to-[#c2410c] text-white rounded-tr-sm" : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm w-full"}`}
                     >
-                      {msg.role === "user"
-                        ? msg.text
-                        : renderMessageContent(msg.text)}
+                      {msg.role === "user" ? (
+                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                      ) : (
+                        renderMessageContent(msg.text)
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -329,36 +352,39 @@ export default function ChatWidget({ user }: { user: any }) {
               ))}
             </div>
 
+            {/* UPGRADED FLEX CONTAINER TO FIX SCROLLBAR OVERLAP */}
             <div className="p-4 border-t border-white/10 bg-[#0a0a0a]">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleSendMessage(input);
                 }}
-                className="relative flex items-center"
+                className="relative flex items-end w-full bg-[#111] border border-white/10 rounded-xl focus-within:border-[#ea580c] transition-colors shadow-inner p-1"
               >
-                <input
-                  type="text"
+                <textarea
+                  ref={textareaRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
                   disabled={isTyping || aiCount >= 50}
                   placeholder={
                     aiCount >= 50
                       ? "Daily limit reached (50/50)"
-                      : "Command AgentX..."
+                      : "Command AgentX... (Shift+Enter for new line)"
                   }
-                  className="w-full bg-[#111] border border-white/10 rounded-xl pl-4 pr-12 py-3.5 text-sm text-white focus:outline-none focus:border-[#ea580c] transition-colors disabled:opacity-50 shadow-inner"
+                  rows={1}
+                  className="flex-1 bg-transparent pl-3 pr-2 py-2 text-sm text-white focus:outline-none disabled:opacity-50 resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 min-h-12 max-h-30"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isTyping || aiCount >= 50}
-                  className="absolute right-2 p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md"
+                  className="cursor-pointer p-2 bg-[#ea580c] hover:bg-[#f97316] disabled:bg-gray-700 disabled:text-gray-400 rounded-lg text-white transition-all shadow-md shrink-0 mb-1.5 mr-0.5"
                 >
                   <Send
                     size={16}
                     className={
                       input.trim() && !isTyping && aiCount < 50
-                        ? "translate-x-0.5 -translate-y-0.5 transition-transform"
+                        ? "translate-x-0.2 -translate-y-0.3 transition-transform"
                         : ""
                     }
                   />
