@@ -1,5 +1,7 @@
 console.log("AgentX Background worker initialized.");
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "SAVE_AUTH_TOKEN") {
     chrome.storage.local.get("agentx_token", (res) => {
@@ -21,16 +23,13 @@ setInterval(async () => {
 
     if (!token) return;
 
-    const response = await fetch(
-      "http://localhost:4000/users/campaigns/queue/next",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+    const response = await fetch(`${BACKEND_URL}/users/campaigns/queue/next`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
 
     if (response.status === 404) return;
 

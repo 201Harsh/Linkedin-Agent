@@ -1,6 +1,10 @@
 console.log("[AgentX] Content Script injected successfully!");
 
-if (window.location.hostname === "localhost") {
+const FRONTEND_URL =
+  import.meta.env.VITE_FRONTEND_URL || "http://localhost:3000";
+const frontendHostname = new URL(FRONTEND_URL).hostname;
+
+if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
     const token = localStorage.getItem("accessToken");
@@ -19,31 +23,44 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-const findElement = (scopeSelector: string, text: string) => {
-  const scope = document.querySelector(scopeSelector) || document.body;
-  const elements = Array.from(
-    scope.querySelectorAll('button, [role="button"], span, div'),
-  );
-
-  const foundElement = elements.find((el) => {
-    const style = window.getComputedStyle(el);
-    const isVisible =
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.opacity !== "0";
-
-    const elText = el.textContent || "";
-    return isVisible && elText.trim() === text;
-  }) as HTMLElement | undefined;
-
-  if (foundElement) {
-    return (
-      (foundElement.closest('button, [role="button"]') as HTMLElement) ||
-      foundElement
+// THE HOMING MISSILE: It checks, waits, and checks again until the element actually exists
+const clickExactText = async (
+  text: string,
+  scopeSelector: string,
+  maxRetries = 5,
+) => {
+  for (let i = 0; i < maxRetries; i++) {
+    const scope = document.querySelector(scopeSelector) || document.body;
+    const elements = Array.from(
+      scope.querySelectorAll(
+        "button, [role='button'], .artdeco-dropdown__item, span",
+      ),
     );
-  }
 
-  return undefined;
+    for (const el of elements) {
+      const htmlEl = el as HTMLElement;
+      // Strict exact match only
+      if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
+        const style = window.getComputedStyle(htmlEl);
+        // Stripped out the aggressive bounding box checks. Just checking if it's strictly hidden.
+        if (style.display !== "none" && style.visibility !== "hidden") {
+          const clickable =
+            (htmlEl.closest(
+              "button, [role='button'], .artdeco-dropdown__item",
+            ) as HTMLElement) || htmlEl;
+          console.log(`[AgentX] Found '${text}', clicking now...`);
+          clickable.click();
+          return true;
+        }
+      }
+    }
+    // If it didn't find it, wait 1 second and try again (Handles LinkedIn's slow animations)
+    console.log(
+      `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+    );
+    await humanPause(800, 1200);
+  }
+  return false;
 };
 
 chrome.runtime.onMessage.addListener(
@@ -59,72 +76,65 @@ chrome.runtime.onMessage.addListener(
       console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
       try {
-        await humanPause(2000, 4000); // Wait for the page to fully render
+        await humanPause(2500, 4500);
 
-        let connectBtn = findElement("main", "Connect");
+        // 1. Try to find Connect on the main row (retries 3 times)
+        let clickedConnect = await clickExactText("Connect", "main", 3);
 
-        if (!connectBtn) {
-          console.log(
-            '[AgentX] Connect button hidden. Hunting in "More" menu...',
-          );
-          const moreBtn = findElement("main", "More");
+        // 2. If no Connect, pop the More menu
+        if (!clickedConnect) {
+          console.log("[AgentX] Connect hidden. Opening 'More' menu...");
+          const clickedMore = await clickExactText("More", "main", 3);
 
-          if (moreBtn) {
-            moreBtn.click();
-            await humanPause(1500, 2500); // Wait for dropdown menu to animate
+          if (clickedMore) {
+            await humanPause(1500, 2500); // Wait for dropdown to physically open
 
-            connectBtn = findElement(
-              ".artdeco-dropdown__content--is-open",
+            // 3. Hunt for Connect STRICTLY inside the open dropdown (retries 5 times)
+            clickedConnect = await clickExactText(
               "Connect",
+              ".artdeco-dropdown__content--is-open",
+              5,
             );
           }
         }
 
-        if (!connectBtn) {
+        if (!clickedConnect) {
           console.warn(
             "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
           );
           return;
         }
 
-        console.log("[AgentX] Found Connect button! Clicking...");
-        connectBtn.click();
+        // 4. Wait for the popup modal
+        console.log("[AgentX] Waiting for modal to appear...");
+        await humanPause(2000, 3500);
 
-        await humanPause(2000, 4000); // Wait for the modal to pop up
+        // 5. Hunt for the Premium Bypass button (retries 5 times)
+        const clickedSendWithoutNote = await clickExactText(
+          "Send without a note",
+          ".artdeco-modal",
+          5,
+        );
 
-        const addNoteBtn = findElement(".artdeco-modal", "Add a note");
-
-        if (addNoteBtn) {
-          console.log("[AgentX] Clicking Add Note...");
-          addNoteBtn.click();
-          await humanPause(1500, 2500);
+        if (clickedSendWithoutNote) {
+          console.log(
+            "[AgentX] ✅ Target successfully engaged via premium bypass.",
+          );
         } else {
           console.log(
-            '[AgentX] "Add a note" button not found, modal might have skipped directly to message input.',
+            "[AgentX] 'Send without a note' not found. Trying standard 'Send'...",
           );
-        }
+          const clickedSend = await clickExactText("Send", ".artdeco-modal", 3);
 
-        const textarea = document.querySelector(
-          'textarea[name="message"], textarea#custom-message',
-        ) as HTMLTextAreaElement;
-
-        if (textarea) {
-          console.log("[AgentX] Typing personalized message...");
-          textarea.value = request.note;
-          textarea.dispatchEvent(new Event("input", { bubbles: true }));
-
-          await humanPause(3000, 6000); // Proofread like a human
-
-          const sendBtn = findElement(".artdeco-modal", "Send");
-          if (sendBtn) {
-            console.log("[AgentX] Clicking Send!");
-            sendBtn.click();
-            console.log("[AgentX] ✅ Target successfully engaged.");
+          if (clickedSend) {
+            console.log(
+              "[AgentX] ✅ Target successfully engaged via standard send.",
+            );
           } else {
-            console.warn("[AgentX] Send button not found in modal.");
+            console.warn(
+              "[AgentX] ⚠️ Could not find any send button in the modal.",
+            );
           }
-        } else {
-          console.warn("[AgentX] Text area not found in modal.");
         }
       } catch (error) {
         console.error("[AgentX] Automation failed:", error);

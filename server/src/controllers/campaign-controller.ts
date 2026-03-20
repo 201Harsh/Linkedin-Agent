@@ -44,7 +44,7 @@ export const getNextLead = async (
   try {
     const userId = (req as any).user.id;
 
-    const nextLead = await CampaignModel.findOneAndReplace(
+    const nextLead = await CampaignModel.findOneAndUpdate(
       { userId, status: "pending" },
       { status: "sent" },
       { new: true, sort: { createdAt: 1 } },
