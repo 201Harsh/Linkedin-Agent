@@ -201,7 +201,7 @@ function DashboardContent() {
                   </div>
 
                   <div className="mt-5 flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 bg-[#ea580c]/10 text-[#ea580c] px-3 py-1.5 rounded-full text-xs font-medium border border-[#ea580c]/20">
+                    <span className="inline-flex items-center gap-1.5 bg-green-400/10 text-green-400 px-3 py-1.5 rounded-full text-xs font-medium border border-green-400/20">
                       <Activity size={12} className="animate-pulse" /> Agent
                       Active
                     </span>
@@ -210,7 +210,7 @@ function DashboardContent() {
                         href={user.profileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-3 py-1.5 rounded-full text-xs font-medium border border-white/10 transition-all"
+                        className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-sky-400/10 text-gray-300 hover:text-sky-400 px-3 py-1.5 rounded-full text-xs font-medium border border-white/10 transition-all"
                       >
                         <Link size={12} /> View Profile
                       </a>
