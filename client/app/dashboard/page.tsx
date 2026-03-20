@@ -15,6 +15,8 @@ import {
   Save,
   Clock,
   CheckCircle2,
+  Mail,
+  Link,
 } from "lucide-react";
 import AxiosInstance, { setAccessToken } from "@/config/AxiosInstance";
 import ChatWidget from "../Components/ChatWidget";
@@ -176,6 +178,12 @@ function DashboardContent() {
 
                   <div className="flex flex-col gap-3 mt-5 pb-5 border-b border-white/10">
                     <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
+                      <Mail size={14} className="text-[#ea580c]" />
+                      <span className="truncate">
+                        {user.email || "No email provided"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
                       <MapPin size={14} className="text-[#ea580c]" />
                       <span>{user.location || "Not Specified"}</span>
                     </div>
@@ -192,10 +200,21 @@ function DashboardContent() {
                     </div>
                   </div>
 
-                  <div className="mt-5">
-                    <span className="inline-block bg-[#ea580c]/10 text-[#ea580c] px-3 py-1 rounded-full text-xs font-medium border border-[#ea580c]/20">
-                      Agent Active
+                  <div className="mt-5 flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 bg-[#ea580c]/10 text-[#ea580c] px-3 py-1.5 rounded-full text-xs font-medium border border-[#ea580c]/20">
+                      <Activity size={12} className="animate-pulse" /> Agent
+                      Active
                     </span>
+                    {user.profileUrl && (
+                      <a
+                        href={user.profileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white px-3 py-1.5 rounded-full text-xs font-medium border border-white/10 transition-all"
+                      >
+                        <Link size={12} /> View Profile
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
