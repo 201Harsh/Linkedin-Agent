@@ -85,46 +85,42 @@ const clickTarget = async (
 };
 
 // Uses the EXACT html snippet you provided
-const executeNoteLessSend = async (maxRetries = 5) => {
+// Uses the EXACT html snippet globally and waits for animation to settle
+const executeNoteLessSend = async (maxRetries = 7) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
-    for (const modal of modals) {
-      if (modal.getBoundingClientRect().width === 0) continue;
+    // Strategy 1: Global search for the exact aria-label (Safest & most direct)
+    const ariaBtn = document.querySelector(
+      "button[aria-label='Send without a note']",
+    ) as HTMLElement;
 
-      // Strategy 1: Exact aria-label from your snippet
-      const ariaBtn = modal.querySelector(
-        "button[aria-label='Send without a note']",
-      ) as HTMLElement;
-      if (ariaBtn) {
-        console.log("[AgentX] ✅ Found 'Send without a note' via aria-label.");
-        ariaBtn.click();
-        return true;
-      }
-
-      // Strategy 2: Span text fallback
-      const spans = Array.from(
-        modal.querySelectorAll("span.artdeco-button__text"),
+    // Ensure the button actually exists and has physical width on screen
+    if (ariaBtn && ariaBtn.getBoundingClientRect().width > 0) {
+      console.log(
+        "[AgentX] ✅ Found 'Send without a note'. Waiting for animation to settle...",
       );
-      for (const span of spans) {
-        const text = (span.textContent || "").trim().toLowerCase();
-        if (text === "send without a note" || text === "send") {
+      await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
+      ariaBtn.click();
+      return true;
+    }
+
+    // Strategy 2: Global search for the exact span text
+    const spans = Array.from(
+      document.querySelectorAll("span.artdeco-button__text"),
+    );
+    for (const span of spans) {
+      const text = (span.textContent || "").trim().toLowerCase();
+      if (text === "send without a note") {
+        const spanRect = span.getBoundingClientRect();
+        if (spanRect.width > 0) {
           console.log("[AgentX] ✅ Found send button via span text.");
+          await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
           const parentBtn = span.closest("button") as HTMLElement;
           (parentBtn || (span as HTMLElement)).click();
           return true;
         }
       }
-
-      // Strategy 3: Primary fallback
-      const primaryBtn = modal.querySelector(
-        "button.artdeco-button--primary",
-      ) as HTMLElement;
-      if (primaryBtn) {
-        console.log("[AgentX] ✅ Triggered via primary button fallback.");
-        primaryBtn.click();
-        return true;
-      }
     }
+
     console.log(
       `[AgentX] Waiting for modal buttons... (${i + 1}/${maxRetries})`,
     );
