@@ -40,7 +40,7 @@ const clickExactText = async (
       const htmlEl = el as HTMLElement;
       if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
         const style = window.getComputedStyle(htmlEl);
-        // Stripped out the aggressive bounding box checks. Just checking if it's strictly hidden.
+
         if (style.display !== "none" && style.visibility !== "hidden") {
           const clickable =
             (htmlEl.closest(
@@ -52,7 +52,7 @@ const clickExactText = async (
         }
       }
     }
-    // If it didn't find it, wait 1 second and try again (Handles LinkedIn's slow animations)
+
     console.log(
       `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
     );
@@ -76,18 +76,14 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(2500, 4500);
 
-        // 1. Try to find Connect on the main row (retries 3 times)
         let clickedConnect = await clickExactText("Connect", "main", 3);
 
-        // 2. If no Connect, pop the More menu
         if (!clickedConnect) {
           console.log("[AgentX] Connect hidden. Opening 'More' menu...");
           const clickedMore = await clickExactText("More", "main", 3);
 
           if (clickedMore) {
-            await humanPause(1500, 2500); // Wait for dropdown to physically open
-
-            // 3. Hunt for Connect STRICTLY inside the open dropdown (retries 5 times)
+            await humanPause(1500, 2500);
             clickedConnect = await clickExactText(
               "Connect",
               ".artdeco-dropdown__content--is-open",
@@ -103,11 +99,9 @@ chrome.runtime.onMessage.addListener(
           return;
         }
 
-        // 4. Wait for the popup modal
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // 5. Hunt for the Premium Bypass button (retries 5 times)
         const clickedSendWithoutNote = await clickExactText(
           "Send without a note",
           ".artdeco-modal",

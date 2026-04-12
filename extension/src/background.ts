@@ -1,8 +1,8 @@
-console.log("AgentX Background worker initialized.");
+console.log("[AgentX] Background worker initialized.");
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request: any) => {
   if (request.action === "SAVE_AUTH_TOKEN") {
     chrome.storage.local.get("agentx_token", (res) => {
       if (res.agentx_token !== request.token) {
@@ -63,4 +63,3 @@ setInterval(async () => {
     console.error("[AgentX] Fatal polling error:", error);
   }
 }, 10000);
-
