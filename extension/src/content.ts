@@ -24,7 +24,7 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- YOUR WORKING DOM HUNTER ---
+// Your exact working DOM hunter
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -71,7 +71,7 @@ const clickTarget = async (
               "button, [role='button'], .artdeco-dropdown__item, a",
             ) as HTMLElement) || htmlEl;
           console.log(`[AgentX] Found '${text || aria}', clicking now...`);
-          clickable.click(); // Back to safe, standard click
+          clickable.click(); // Safe, standard click
           return true;
         }
       }
@@ -84,76 +84,74 @@ const clickTarget = async (
   return false;
 };
 
-// --- NEW: PUNCHES THROUGH REACT MODAL EVENT BLOCKERS ---
-const forceModalClick = (el: HTMLElement) => {
-  try {
-    el.focus();
-    const eventObj = { bubbles: true, cancelable: true, view: window };
-    el.dispatchEvent(new MouseEvent("mousedown", eventObj));
-    el.dispatchEvent(new MouseEvent("mouseup", eventObj));
-    el.click();
-    console.log("[AgentX] 💥 Forced click dispatched on modal button.");
-  } catch (e) {
-    console.error("[AgentX] Forced click failed:", e);
-  }
-};
-
-// --- UPGRADED MODAL BYPASS ---
+// --- THE FIX: VERIFICATION LOOP FOR THE MODAL ---
 const executeNoteLessSend = async (maxRetries = 7) => {
   for (let i = 0; i < maxRetries; i++) {
-    // Strategy 1: Global search for the exact aria-label
-    const ariaBtn = document.querySelector(
-      "button[aria-label='Send without a note']",
-    ) as HTMLElement;
+    const modal = document.querySelector(".artdeco-modal");
 
-    if (ariaBtn && ariaBtn.getBoundingClientRect().width > 0) {
+    if (!modal) {
       console.log(
-        "[AgentX] ✅ Found 'Send without a note' via aria-label. Waiting for animation to settle...",
+        `[AgentX] Waiting for modal to render... (${i + 1}/${maxRetries})`,
       );
-      await humanPause(800, 1000); // CRITICAL: Let the fade-in animation finish
-      forceModalClick(ariaBtn);
-      return true;
+      await humanPause(1000, 1500);
+      continue;
     }
 
-    // Strategy 2: Global search for the exact span text
-    const spans = Array.from(
-      document.querySelectorAll("span.artdeco-button__text"),
-    );
-    for (const span of spans) {
-      const text = (span.textContent || "").trim().toLowerCase();
-      if (text === "send without a note") {
-        const spanRect = span.getBoundingClientRect();
-        if (spanRect.width > 0) {
-          console.log(
-            "[AgentX] ✅ Found send button via span text. Waiting for animation to settle...",
-          );
-          await humanPause(800, 1200); // CRITICAL: Let the fade-in animation finish
-          const parentBtn = span.closest("button") as HTMLElement;
-          forceModalClick(parentBtn || (span as HTMLElement));
-          return true;
+    // Try finding the button via Aria Label or Primary Class
+    let sendBtn = modal.querySelector(
+      "button[aria-label='Send without a note']",
+    ) as HTMLButtonElement;
+
+    if (!sendBtn) {
+      // Fallback to searching the spans if aria-label is missing
+      const spans = Array.from(
+        modal.querySelectorAll("span.artdeco-button__text"),
+      );
+      for (const span of spans) {
+        if (
+          (span.textContent || "").trim().toLowerCase() ===
+          "send without a note"
+        ) {
+          sendBtn = span.closest("button") as HTMLButtonElement;
+          break;
         }
       }
     }
 
-    // Strategy 3: Primary button fallback
-    const modal = document.querySelector(".artdeco-modal");
-    if (modal) {
-      const primaryBtn = modal.querySelector(
+    if (!sendBtn) {
+      // Final fallback: just grab the primary blue button
+      sendBtn = modal.querySelector(
         "button.artdeco-button--primary",
-      ) as HTMLElement;
-      if (primaryBtn && primaryBtn.getBoundingClientRect().width > 0) {
-        console.log(
-          "[AgentX] ✅ Found primary send button fallback. Waiting for animation to settle...",
-        );
-        await humanPause(800, 1200);
-        forceModalClick(primaryBtn);
-        return true;
-      }
+      ) as HTMLButtonElement;
     }
 
-    console.log(
-      `[AgentX] Waiting for modal buttons... (${i + 1}/${maxRetries})`,
-    );
+    // If we found the button, ensure it's fully loaded and click it
+    if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
+      // LinkedIn sometimes disables the button for a split second while opening
+      if (sendBtn.disabled) {
+        console.log("[AgentX] Button is currently disabled, waiting...");
+        await humanPause(800, 1200);
+        continue;
+      }
+
+      console.log("[AgentX] ✅ Found Send button. Executing click...");
+      sendBtn.click();
+
+      // VERIFICATION: Did the click actually work?
+      await humanPause(1500, 2000);
+      if (!document.querySelector(".artdeco-modal")) {
+        console.log("[AgentX] ✅ Modal successfully closed. Send confirmed.");
+        return true;
+      } else {
+        console.warn("[AgentX] ⚠️ Click ignored by LinkedIn. Retrying...");
+        // Loop will naturally continue and click it again
+      }
+    } else {
+      console.log(
+        `[AgentX] Waiting for buttons inside modal... (${i + 1}/${maxRetries})`,
+      );
+    }
+
     await humanPause(1000, 1500);
   }
   return false;
@@ -174,7 +172,6 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(3000, 4500);
 
-        // Using "main" as the scope, just like your old code
         let clickedConnect = await clickTarget("Connect", "main", 3);
 
         if (!clickedConnect) {
@@ -199,7 +196,7 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        const modalSuccess = await executeNoteLessSend(5);
+        const modalSuccess = await executeNoteLessSend(7);
 
         if (!modalSuccess) {
           console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
