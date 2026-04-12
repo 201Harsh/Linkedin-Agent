@@ -60,33 +60,27 @@ const clickExactText = async (
   return false;
 };
 
-// --- THE KEYBOARD STRIKE (BYPASSES MOUSE BLOCKERS) ---
-const executeKeyboardSend = async (maxRetries = 8) => {
+// --- YOUR EXACT NEW LOGIC: THE KEYBOARD STRIKE ---
+const isolatedModalClick = async (maxRetries = 8) => {
   for (let i = 0; i < maxRetries; i++) {
     const modal = document.querySelector(".artdeco-modal");
 
     if (modal) {
-      // Find the "Send without a note" button using Aria-Label or Text
-      let sendBtn = modal.querySelector(
-        "button[aria-label='Send without a note']",
+      // Find the primary blue button that has "Send" in the text
+      const buttons = Array.from(
+        modal.querySelectorAll("button.artdeco-button--primary"),
+      );
+      const sendBtn = buttons.find((b) =>
+        (b.textContent || "").toLowerCase().includes("send"),
       ) as HTMLElement;
 
-      if (!sendBtn) {
-        const buttons = Array.from(modal.querySelectorAll("button"));
-        sendBtn = buttons.find((b) =>
-          (b.textContent || "").toLowerCase().includes("send without a note"),
-        ) as HTMLElement;
-      }
-
       if (sendBtn) {
-        console.log(
-          "[AgentX] Found 'Send without a note'. Waiting 1.5s for UI to freeze...",
-        );
+        console.log("[AgentX] Found 'Send'. Waiting 1.5s for UI to freeze...");
         await humanPause(1500, 2000);
 
         console.log("[AgentX] Executing Keyboard Strike...");
 
-        // 1. Physically focus the button (like hitting the Tab key)
+        // 1. Physically focus the button (like hitting Tab)
         sendBtn.focus();
 
         // 2. Try a normal click just in case
@@ -153,7 +147,7 @@ const runConnectionSequence = async () => {
     console.log("[AgentX] Waiting for modal to appear...");
     await humanPause(2000, 3500);
 
-    const clickedSendWithoutNote = await executeKeyboardSend(8);
+    const clickedSendWithoutNote = await isolatedModalClick(8);
 
     if (clickedSendWithoutNote) {
       console.log("[AgentX] ✅ Target successfully engaged.");
@@ -167,11 +161,11 @@ const runConnectionSequence = async () => {
   }
 };
 
-// --- API-FREE TESTING HOTKEY (CTRL + SHIFT + Y) ---
-document.addEventListener("keydown", (e) => {
-  // Press Ctrl + Shift + Y to trigger the bot manually
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "y") {
-    console.log("[AgentX] 🚨 MANUAL OVERRIDE TRIGGERED VIA HOTKEY 🚨");
+// --- API-FREE TESTING LISTENER ---
+// This lets you trigger the bot locally without your backend
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.action === "TEST_CONNECT") {
+    console.log("[AgentX] 🚨 MANUAL TEST INITIATED VIA CONSOLE 🚨");
     runConnectionSequence();
   }
 });
