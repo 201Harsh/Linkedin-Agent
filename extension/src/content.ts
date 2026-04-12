@@ -25,22 +25,14 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE ULTIMATE DOM HUNTER: Uses broad inclusion to bypass SVG traps
+// THE TITAN DOM HUNTER: Uses Aria-Labels and Regex Stripping
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
   maxRetries = 5,
 ) => {
   for (let i = 0; i < maxRetries; i++) {
-    const scope = document.querySelector(scopeSelector);
-
-    if (!scope) {
-      console.log(
-        `[AgentX] Scope '${scopeSelector}' not found... (${i + 1}/${maxRetries})`,
-      );
-      await humanPause(800, 1200);
-      continue;
-    }
+    const scope = document.querySelector(scopeSelector) || document.body;
 
     const elements = Array.from(
       scope.querySelectorAll(
@@ -50,18 +42,34 @@ const clickTarget = async (
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      const textContent = (htmlEl.textContent || "").trim();
 
-      // If the text explicitly includes our target (e.g. "Connect" is inside "Connect icon Connect")
+      const ariaLabel = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
+      const rawText = (htmlEl.textContent || "").toLowerCase();
+
+      // Regex strips everything except letters. Turns "+ Connect " and SVGs into purely "connect"
+      const strippedText = rawText.replace(/[^a-z]/g, "");
+      const cleanTarget = targetText.toLowerCase().replace(/[^a-z]/g, "");
+
+      // Strategy 1: Explicit Aria-Label Match (Safest)
+      // Strategy 2: Stripped Text Match (Bypasses all SVGs and + signs)
       if (
-        textContent === targetText ||
-        textContent.includes(`\n${targetText}`) ||
-        textContent.includes(`${targetText}\n`)
+        ariaLabel.includes(targetText.toLowerCase()) ||
+        strippedText.includes(cleanTarget)
       ) {
+        // Block it from accidentally clicking "Show more" in the about section
+        if (
+          targetText === "More" &&
+          (ariaLabel.includes("show") || strippedText.includes("showmore"))
+        ) {
+          continue;
+        }
+
         const rect = htmlEl.getBoundingClientRect();
 
         if (rect.width > 0 && rect.height > 0) {
-          console.log(`[AgentX] Found VISIBLE '${targetText}', clicking...`);
+          console.log(
+            `[AgentX] 🎯 Locked onto '${targetText}', executing click...`,
+          );
           htmlEl.click();
           return true;
         }
@@ -69,56 +77,40 @@ const clickTarget = async (
     }
 
     console.log(
-      `[AgentX] '${targetText}' not physically visible yet... (${i + 1}/${maxRetries})`,
+      `[AgentX] Hunting for '${targetText}'... (${i + 1}/${maxRetries})`,
     );
-    await humanPause(800, 1200);
+    await humanPause(1000, 1500);
   }
   return false;
 };
 
-// The Modal Bypass: Explicitly hunts for 'Send without a note' via Aria-Labels or Primary Classes
+// The Note-Less Modal Bypass
 const executeNoteLessSend = async (maxRetries = 5) => {
   for (let i = 0; i < maxRetries; i++) {
     const modal = document.querySelector(".artdeco-modal");
     if (modal) {
-      // Strategy 1: Look for the explicit aria-label (Most reliable for free accounts)
       const ariaBtn = modal.querySelector(
         "button[aria-label='Send without a note']",
       ) as HTMLElement;
       if (ariaBtn) {
-        console.log(
-          "[AgentX] ✅ Found 'Send without a note' via aria-label. Clicking...",
-        );
+        console.log("[AgentX] ✅ Note-less send triggered via aria-label.");
         ariaBtn.click();
         return true;
       }
 
-      // Strategy 2: Look for a button that literally says "Send without a note"
-      const allButtons = Array.from(modal.querySelectorAll("button"));
-      for (const btn of allButtons) {
-        if ((btn.textContent || "").includes("Send without a note")) {
-          console.log(
-            "[AgentX] ✅ Found 'Send without a note' via text. Clicking...",
-          );
-          btn.click();
-          return true;
-        }
-      }
-
-      // Strategy 3: Just hit the primary button (Fallback)
       const primaryBtn = modal.querySelector(
         "button.artdeco-button--primary",
       ) as HTMLElement;
       if (primaryBtn) {
-        console.log("[AgentX] ✅ Hitting primary modal button as fallback...");
+        console.log(
+          "[AgentX] ✅ Note-less send triggered via primary button fallback.",
+        );
         primaryBtn.click();
         return true;
       }
     }
-    console.log(
-      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
-    );
-    await humanPause(800, 1200);
+    console.log(`[AgentX] Waiting for modal... (${i + 1}/${maxRetries})`);
+    await humanPause(1000, 1500);
   }
   return false;
 };
@@ -136,25 +128,22 @@ chrome.runtime.onMessage.addListener(
       console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
       try {
-        await humanPause(2500, 4500);
+        // Wait longer for LinkedIn's heavy React frontend to finish hydrating
+        await humanPause(3500, 5000);
 
-        // Scope to the top profile card only
-        const TOP_CARD_SCOPE =
-          "main > section:first-child, .pv-top-card, .ph5.pb5";
+        // Broadened scope to guarantee we never miss the profile buttons
+        const MAIN_SCOPE = "main";
 
-        // 1. Check for Connect button
-        let clickedConnect = await clickTarget("Connect", TOP_CARD_SCOPE, 3);
+        let clickedConnect = await clickTarget("Connect", MAIN_SCOPE, 4);
 
-        // 2. If blocked by 'Follow', hit 'More'
         if (!clickedConnect) {
           console.log(
-            "[AgentX] Connect hidden by Follow. Opening 'More' menu...",
+            "[AgentX] Primary Connect not found. Deploying 'More' menu strategy...",
           );
-          const clickedMore = await clickTarget("More", TOP_CARD_SCOPE, 3);
+          const clickedMore = await clickTarget("More", MAIN_SCOPE, 3);
 
           if (clickedMore) {
-            await humanPause(1500, 2500);
-            // 3. Hunt for Connect inside the dropdown
+            await humanPause(2000, 3000); // Wait for the dropdown animation
             clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
@@ -165,24 +154,23 @@ chrome.runtime.onMessage.addListener(
 
         if (!clickedConnect) {
           console.warn(
-            "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
+            "[AgentX] ⚠️ Target is locked down. Cannot connect. Aborting.",
           );
           return;
         }
 
-        console.log("[AgentX] Waiting for modal to appear...");
-        await humanPause(2000, 3500);
+        console.log("[AgentX] Waiting for connection modal...");
+        await humanPause(2500, 4000);
 
-        // 4. Force the Note-less send
         const modalSuccess = await executeNoteLessSend(5);
 
         if (!modalSuccess) {
-          console.warn(
-            "[AgentX] ⚠️ Failed to locate the send button inside the modal.",
-          );
+          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
+        } else {
+          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
         }
       } catch (error) {
-        console.error("[AgentX] Automation failed:", error);
+        console.error("[AgentX] Fatal runtime error:", error);
       }
     }
   },
