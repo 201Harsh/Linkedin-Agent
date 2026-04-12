@@ -25,7 +25,52 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE TITAN DOM HUNTER: Uses Aria-Labels and Regex Stripping
+// THE BOMB: Bypasses React's synthetic event traps by faking raw mouse hardware events
+const forceClick = async (el: HTMLElement) => {
+  try {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    await new Promise((r) => setTimeout(r, 600)); // Let the scroll animation settle
+
+    el.focus();
+
+    // Dispatch a complete physical mouse lifecycle
+    el.dispatchEvent(
+      new MouseEvent("mouseenter", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }),
+    );
+    el.dispatchEvent(
+      new MouseEvent("mouseover", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }),
+    );
+    el.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }),
+    );
+    el.click(); // Trigger native click alongside hardware events
+    el.dispatchEvent(
+      new MouseEvent("mouseup", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }),
+    );
+
+    console.log("[AgentX] 💥 Hardware-level force-click dispatched.");
+  } catch (error) {
+    console.error("[AgentX] Force click failed:", error);
+  }
+};
+
+// THE TITAN DOM HUNTER
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -46,17 +91,15 @@ const clickTarget = async (
       const ariaLabel = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
       const rawText = (htmlEl.textContent || "").toLowerCase();
 
-      // Regex strips everything except letters. Turns "+ Connect " and SVGs into purely "connect"
+      // Regex strips everything except letters
       const strippedText = rawText.replace(/[^a-z]/g, "");
       const cleanTarget = targetText.toLowerCase().replace(/[^a-z]/g, "");
 
-      // Strategy 1: Explicit Aria-Label Match (Safest)
-      // Strategy 2: Stripped Text Match (Bypasses all SVGs and + signs)
       if (
         ariaLabel.includes(targetText.toLowerCase()) ||
         strippedText.includes(cleanTarget)
       ) {
-        // Block it from accidentally clicking "Show more" in the about section
+        // Prevent accidental clicks on "Show more" in about section
         if (
           targetText === "More" &&
           (ariaLabel.includes("show") || strippedText.includes("showmore"))
@@ -68,9 +111,9 @@ const clickTarget = async (
 
         if (rect.width > 0 && rect.height > 0) {
           console.log(
-            `[AgentX] 🎯 Locked onto '${targetText}', executing click...`,
+            `[AgentX] 🎯 Locked onto '${targetText}', executing force-click...`,
           );
-          htmlEl.click();
+          await forceClick(htmlEl);
           return true;
         }
       }
@@ -94,7 +137,7 @@ const executeNoteLessSend = async (maxRetries = 5) => {
       ) as HTMLElement;
       if (ariaBtn) {
         console.log("[AgentX] ✅ Note-less send triggered via aria-label.");
-        ariaBtn.click();
+        await forceClick(ariaBtn);
         return true;
       }
 
@@ -105,7 +148,7 @@ const executeNoteLessSend = async (maxRetries = 5) => {
         console.log(
           "[AgentX] ✅ Note-less send triggered via primary button fallback.",
         );
-        primaryBtn.click();
+        await forceClick(primaryBtn);
         return true;
       }
     }
@@ -128,11 +171,10 @@ chrome.runtime.onMessage.addListener(
       console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
       try {
-        // Wait longer for LinkedIn's heavy React frontend to finish hydrating
         await humanPause(3500, 5000);
 
-        // Broadened scope to guarantee we never miss the profile buttons
-        const MAIN_SCOPE = "main";
+        // Strictly bound to the main profile section so it ignores the sidebar
+        const MAIN_SCOPE = ".ph5.pb5, .pv-top-card, main > section:first-child";
 
         let clickedConnect = await clickTarget("Connect", MAIN_SCOPE, 4);
 
@@ -143,7 +185,7 @@ chrome.runtime.onMessage.addListener(
           const clickedMore = await clickTarget("More", MAIN_SCOPE, 3);
 
           if (clickedMore) {
-            await humanPause(2000, 3000); // Wait for the dropdown animation
+            await humanPause(2000, 3000);
             clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
