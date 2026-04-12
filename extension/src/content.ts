@@ -80,102 +80,49 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE REACT BUTTON FIX ---
-// This guarantees we click the inner text span, not just the outer wrapper div
-const clickReactButton = (button: HTMLElement) => {
-  if (!button) return;
-  const innerSpan = button.querySelector("span");
-  if (innerSpan) {
-    innerSpan.click(); // Hit the bullseye
-  }
-  button.click(); // Hit the wrapper just in case
+// --- THE EMBER.JS BUTTON BYPASS ---
+const clickEmberButton = (btn: HTMLElement) => {
+  // Ember requires this exact sequence to register a physical click
+  const opts = { bubbles: true, cancelable: true, view: window };
+  btn.dispatchEvent(new MouseEvent("mousedown", opts));
+  btn.dispatchEvent(new MouseEvent("mouseup", opts));
+  btn.click();
 };
 
-// --- THE UPDATED MODAL HANDLER ---
-const executeModalAction = async (noteText: string, maxRetries = 10) => {
+// --- THE STRICT "SEND WITHOUT NOTE" HANDLER ---
+const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modal = document.querySelector(".artdeco-modal");
-    if (!modal) {
-      await humanPause(800, 1200);
-      continue;
-    }
+    // Look at all modals in case LinkedIn leaves a hidden ghost modal in the DOM
+    const modals = document.querySelectorAll(".artdeco-modal");
 
-    // STRATEGY 1: User has a note -> Click "Add a note"
-    if (noteText) {
-      const addNoteBtn = modal.querySelector(
-        "button[aria-label='Add a note']",
-      ) as HTMLElement;
+    for (const m of Array.from(modals)) {
+      const modal = m as HTMLElement;
 
-      if (addNoteBtn && addNoteBtn.getBoundingClientRect().width > 0) {
-        console.log("[AgentX] ✅ Found 'Add a note' button. Clicking...");
-        await humanPause(500, 1000);
-        clickReactButton(addNoteBtn);
+      // Ensure this is the active, visible modal
+      if (modal.getBoundingClientRect().width > 0) {
+        // Target the EXACT aria-label from your provided HTML snippet
+        const sendBtn = modal.querySelector(
+          "button[aria-label='Send without a note']",
+        ) as HTMLElement;
 
-        // Wait for text area to slide down
-        await humanPause(1500, 2000);
-        const textarea = modal.querySelector(
-          "textarea[name='message'], textarea#custom-message",
-        ) as HTMLTextAreaElement;
-
-        if (textarea) {
+        if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
           console.log(
-            "[AgentX] ✅ Text box found. Injecting personalized note...",
+            "[AgentX] ✅ Found 'Send without a note'. Letting animation settle...",
           );
-          textarea.value = noteText;
 
-          // Trigger React state update so the Send button unlocks
-          textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          textarea.dispatchEvent(new Event("change", { bubbles: true }));
+          // Wait 1 second for the slide-up animation to completely finish
+          await humanPause(800, 1200);
 
-          await humanPause(1000, 1500);
+          console.log("[AgentX] 💥 Firing Ember-safe click...");
+          clickEmberButton(sendBtn);
 
-          // Find the final primary "Send" button
-          const sendBtn = modal.querySelector(
-            "button.artdeco-button--primary",
-          ) as HTMLElement;
-          if (sendBtn) {
-            console.log("[AgentX] 💥 Hitting final Send button...");
-            clickReactButton(sendBtn);
-            return true;
-          }
+          return true;
         }
       }
     }
 
-    // STRATEGY 2: No note provided in backend -> Fallback to "Send without a note"
-    if (!noteText) {
-      const sendWithoutNoteBtn = modal.querySelector(
-        "button[aria-label='Send without a note']",
-      ) as HTMLElement;
-
-      if (
-        sendWithoutNoteBtn &&
-        sendWithoutNoteBtn.getBoundingClientRect().width > 0
-      ) {
-        console.log(
-          "[AgentX] ✅ No note found in queue. Sending without a note...",
-        );
-        await humanPause(800, 1200); // Let the animation settle
-        clickReactButton(sendWithoutNoteBtn);
-        return true;
-      }
-
-      // Generic fallback just in case LinkedIn alters the aria-label
-      const fallbackBtn = Array.from(modal.querySelectorAll("button")).find(
-        (btn) =>
-          (btn.textContent || "").toLowerCase().includes("send without a note"),
-      ) as HTMLElement;
-
-      if (fallbackBtn && fallbackBtn.getBoundingClientRect().width > 0) {
-        console.log("[AgentX] ✅ Using fallback to send without a note...");
-        await humanPause(800, 1200);
-        clickReactButton(fallbackBtn);
-        return true;
-      }
-    }
-
     console.log(
-      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
+      `[AgentX] Waiting for Send button to appear... (${i + 1}/${maxRetries})`,
     );
     await humanPause(1000, 1500);
   }
@@ -221,8 +168,8 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // PASS THE NOTE TEXT INTO THE FUNCTION
-        const modalSuccess = await executeModalAction(request.note, 10);
+        // Forces the "Send Without Note" execution
+        const modalSuccess = await executeNoteLessSend(10);
 
         if (!modalSuccess) {
           console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
