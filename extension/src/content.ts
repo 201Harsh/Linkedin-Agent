@@ -1,244 +1,110 @@
-console.log("[AgentX] Content Script injected successfully!");
+console.log("[AgentX] Background worker initialized.");
 
-const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:3000";
-const frontendHostname = new URL(FRONTEND_URL).hostname;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
-// Token Sync Engine
-if (window.location.hostname === frontendHostname) {
-  console.log("[AgentX] Monitoring Dashboard for Auth Token...");
-  setInterval(() => {
-    let token = localStorage.getItem("accessToken");
-    if (token) {
-      token = token.replace(/['"]+/g, "");
-      chrome.runtime.sendMessage({
-        action: "SAVE_AUTH_TOKEN",
-        token: token,
-      });
-    }
-  }, 2000);
-}
+chrome.runtime.onMessage.addListener((request: any) => {
+  if (request.action === "SAVE_AUTH_TOKEN") {
+    chrome.storage.local.get("agentx_token", (res) => {
+      if (res.agentx_token !== request.token) {
+        chrome.storage.local.set({ agentx_token: request.token }, () => {
+          console.log("[AgentX Background] Auth Token Synced.");
+        });
+      }
+    });
+  }
+});
 
-const humanPause = (min = 2000, max = 5000) => {
-  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
-  console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-// THE BOMB v3: Pointer Events + Coordinate Targeting
-const forceClick = async (el: HTMLElement) => {
+// The Invincible Polling Engine (Bypasses MV3 Sleep & Freezes)
+const pollQueue = async () => {
   try {
-    el.focus();
+    const storage = await chrome.storage.local.get("agentx_token");
+    const token = storage.agentx_token;
 
-    const rect = el.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
+    if (!token) {
+      console.log("[AgentX] Polling paused: Waiting for Auth Token...");
+      setTimeout(pollQueue, 10000);
+      return;
+    }
 
-    const eventParams = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: x,
-      clientY: y,
-      pointerId: 1,
-      pointerType: "mouse",
-    };
+    console.log("[AgentX] Checking queue...");
 
-    el.dispatchEvent(new PointerEvent("pointerenter", eventParams));
-    el.dispatchEvent(new MouseEvent("mouseenter", eventParams));
-    el.dispatchEvent(new PointerEvent("pointerover", eventParams));
-    el.dispatchEvent(new MouseEvent("mouseover", eventParams));
-    el.dispatchEvent(new PointerEvent("pointerdown", eventParams));
-    el.dispatchEvent(new MouseEvent("mousedown", eventParams));
-
-    el.click();
-
-    const internalElements = el.querySelectorAll("*");
-    internalElements.forEach((child) => {
-      (child as HTMLElement).click();
+    const response = await fetch(`${BACKEND_URL}/users/campaigns/queue/next`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     });
 
-    el.dispatchEvent(new PointerEvent("pointerup", eventParams));
-    el.dispatchEvent(new MouseEvent("mouseup", eventParams));
-    el.dispatchEvent(new MouseEvent("click", eventParams));
-
-    console.log("[AgentX] 💥 God-Mode Pointer-Strike dispatched.");
-  } catch (error) {
-    console.error("[AgentX] Force click failed:", error);
-  }
-};
-
-// THE GOD-MODE HUNTER: Built specifically from LinkedIn's raw DOM structure
-const clickTarget = async (
-  targetText: string,
-  scopeSelector: string,
-  maxRetries = 5,
-) => {
-  for (let i = 0; i < maxRetries; i++) {
-    const scope = document.querySelector(scopeSelector) || document.body;
-
-    // Expanded to catch the specific <a> and <p> tags you found in the DOM
-    const elements = Array.from(
-      scope.querySelectorAll(
-        "button, [role='button'], [role='menuitem'], .artdeco-dropdown__item, a, p",
-      ),
-    );
-
-    for (const el of elements) {
-      const htmlEl = el as HTMLElement;
-
-      const ariaLabel = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
-      const rawText = (htmlEl.textContent || "").toLowerCase();
-      const strippedText = rawText.replace(/[^a-z]/g, "");
-      const cleanTarget = targetText.toLowerCase().replace(/[^a-z]/g, "");
-
-      let isMatch = false;
-
-      // Strategy 1: The "Invite [Name] to connect" Aria-Label trick
-      if (
-        targetText === "Connect" &&
-        ariaLabel.includes("invite") &&
-        ariaLabel.includes("connect")
-      ) {
-        isMatch = true;
-      }
-      // Strategy 2: Exact stripped text match
-      else if (strippedText === cleanTarget || ariaLabel === cleanTarget) {
-        isMatch = true;
-      }
-      // Strategy 3: Broad inclusion (Safeguarded against wrapper traps)
-      else if (
-        ariaLabel.includes(targetText.toLowerCase()) ||
-        strippedText.includes(cleanTarget)
-      ) {
-        if (strippedText.length <= cleanTarget.length + 30) {
-          isMatch = true;
-        }
-      }
-
-      if (isMatch) {
-        // Prevent clicking "Show more" in about section
-        if (
-          targetText === "More" &&
-          (ariaLabel.includes("show") || strippedText.includes("showmore"))
-        ) {
-          continue;
-        }
-
-        const rect = htmlEl.getBoundingClientRect();
-
-        if (rect.width > 0 && rect.height > 0) {
-          console.log(
-            `[AgentX] 🎯 Locked onto exact '${targetText}' element...`,
-          );
-
-          // Climb up to the actual functional parent (the <a> or <button>) to ensure the click registers
-          const clickableEl =
-            (htmlEl.closest(
-              "a, button, [role='menuitem'], [role='button']",
-            ) as HTMLElement) || htmlEl;
-
-          await forceClick(clickableEl);
-          return true;
-        }
-      }
+    if (response.status === 401) {
+      console.error("[AgentX] Token expired (401). Purging dead token...");
+      await chrome.storage.local.remove("agentx_token");
+      setTimeout(pollQueue, 10000);
+      return;
     }
 
-    console.log(
-      `[AgentX] Hunting for '${targetText}'... (${i + 1}/${maxRetries})`,
-    );
-    await humanPause(1000, 1500);
-  }
-  return false;
-};
-
-// The Note-Less Modal Bypass
-const executeNoteLessSend = async (maxRetries = 5) => {
-  for (let i = 0; i < maxRetries; i++) {
-    const modal = document.querySelector(".artdeco-modal");
-    if (modal) {
-      const ariaBtn = modal.querySelector(
-        "button[aria-label='Send without a note']",
-      ) as HTMLElement;
-      if (ariaBtn) {
-        console.log("[AgentX] ✅ Note-less send triggered via aria-label.");
-        await forceClick(ariaBtn);
-        return true;
-      }
-
-      const primaryBtn = modal.querySelector(
-        "button.artdeco-button--primary",
-      ) as HTMLElement;
-      if (primaryBtn) {
-        console.log(
-          "[AgentX] ✅ Note-less send triggered via primary button fallback.",
-        );
-        await forceClick(primaryBtn);
-        return true;
-      }
-    }
-    console.log(`[AgentX] Waiting for modal... (${i + 1}/${maxRetries})`);
-    await humanPause(1000, 1500);
-  }
-  return false;
-};
-
-chrome.runtime.onMessage.addListener(
-  async (request: any, _sender: any, sendResponse: any) => {
-    if (request.action === "PING_DOM") {
-      const name = document
-        .querySelector(".text-heading-xlarge")
-        ?.textContent?.trim();
-      sendResponse({ name });
+    if (response.status === 404) {
+      console.log("[AgentX] Queue empty. Sleeping 10s...");
+      setTimeout(pollQueue, 10000);
+      return;
     }
 
-    if (request.action === "EXECUTE_CONNECT") {
-      console.log("[AgentX] Initiating Autonomous Connection Sequence...");
+    if (!response.ok) {
+      console.error("[AgentX] Polling failed! Status:", response.status);
+      setTimeout(pollQueue, 10000);
+      return;
+    }
 
-      try {
-        await humanPause(3500, 5000);
+    const lead = await response.json();
 
-        const MAIN_SCOPE = ".ph5.pb5, .pv-top-card, main > section:first-child";
+    if (lead && lead.url) {
+      console.log("[AgentX] 🎯 Target Acquired. Booting Sequence...", lead);
 
-        let clickedConnect = await clickTarget("Connect", MAIN_SCOPE, 4);
+      chrome.tabs.create({ url: lead.url, active: false }, (tab) => {
+        if (tab.id) {
+          let sequenceTriggered = false;
 
-        if (!clickedConnect) {
-          console.log(
-            "[AgentX] Primary Connect not found. Deploying 'More' menu strategy...",
-          );
-          const clickedMore = await clickTarget("More", MAIN_SCOPE, 3);
+          // THE FAILSAFE: If LinkedIn hangs and never finishes loading, abort and grab next lead.
+          const failsafe = setTimeout(() => {
+            if (!sequenceTriggered) {
+              console.warn(
+                "[AgentX] ⚠️ Tab load timed out. Aborting and re-polling...",
+              );
+              pollQueue();
+            }
+          }, 20000);
 
-          if (clickedMore) {
-            await humanPause(2000, 3000);
-            // Specifically target the open dropdown
-            clickedConnect = await clickTarget(
-              "Connect",
-              ".artdeco-dropdown__content--is-open",
-              5,
-            );
-          }
-        }
+          chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+            if (tabId === tab.id && info.status === "complete") {
+              chrome.tabs.onUpdated.removeListener(listener);
+              sequenceTriggered = true;
+              clearTimeout(failsafe);
 
-        if (!clickedConnect) {
-          console.warn(
-            "[AgentX] ⚠️ Target is locked down. Cannot connect. Aborting.",
-          );
-          return;
-        }
+              // Wait 4 seconds for React to finish hydrating the UI
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, {
+                  action: "EXECUTE_CONNECT",
+                  note: lead.note,
+                });
 
-        console.log("[AgentX] Waiting for connection modal...");
-        await humanPause(2500, 4000);
-
-        const modalSuccess = await executeNoteLessSend(5);
-
-        if (!modalSuccess) {
-          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
+                // Wait 12 seconds for the content script to click everything, then pull the next lead
+                setTimeout(pollQueue, 12000);
+              }, 4000);
+            }
+          });
         } else {
-          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
+          setTimeout(pollQueue, 10000);
         }
-      } catch (error) {
-        console.error("[AgentX] Fatal runtime error:", error);
-      }
+      });
+
+      return; // Stop the loop here; the tab listener will trigger the next poll
     }
-  },
-);
+  } catch (error) {
+    console.error("[AgentX] Network error:", error);
+  }
+
+  setTimeout(pollQueue, 10000);
+};
+
+// Ignite the engine
+pollQueue();
