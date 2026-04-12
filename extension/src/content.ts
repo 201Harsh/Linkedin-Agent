@@ -4,13 +4,11 @@ const FRONTEND_URL =
   import.meta.env.VITE_FRONTEND_URL || "http://localhost:3000";
 const frontendHostname = new URL(FRONTEND_URL).hostname;
 
-// Token Sync Engine
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
     let token = localStorage.getItem("accessToken");
     if (token) {
-      // Strip any accidental JSON quotes that might cause 401s
       token = token.replace(/['"]+/g, "");
       chrome.runtime.sendMessage({
         action: "SAVE_AUTH_TOKEN",
@@ -26,10 +24,7 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// Aggressively strips out LinkedIn's hidden SVGs and whitespace formatting
-const cleanText = (text: string) => text.replace(/\s+/g, " ").trim();
-
-// The upgraded DOM Hunter for the profile page
+// THE UPGRADED DOM HUNTER: Uses innerText to ignore hidden SVGs
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -46,31 +41,30 @@ const clickTarget = async (
       continue;
     }
 
-    // Broaden the search to grab nested spans inside dropdowns
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item, span.display-flex",
+        "button, [role='button'], .artdeco-dropdown__item",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      const extractedText = cleanText(htmlEl.textContent || "");
 
-      if (extractedText === targetText) {
+      // CRITICAL FIX: innerText only reads visible text, ignoring hidden SVGs.
+      const rawText = htmlEl.innerText || "";
+
+      // Grab the first actual line of text (ignores secondary subtext)
+      const primaryText = rawText.split("\n")[0].trim();
+
+      if (primaryText === targetText) {
         const rect = htmlEl.getBoundingClientRect();
 
         // Ensure it is physically painted on the screen
         if (rect.width > 0 && rect.height > 0) {
-          // Climb up to the actual clickable wrapper if we matched a nested span
-          const clickable =
-            (htmlEl.closest(
-              "button, [role='button'], .artdeco-dropdown__item",
-            ) as HTMLElement) || htmlEl;
           console.log(
             `[AgentX] Found VISIBLE '${targetText}', clicking now...`,
           );
-          clickable.click();
+          htmlEl.click();
           return true;
         }
       }
@@ -84,12 +78,12 @@ const clickTarget = async (
   return false;
 };
 
-// The Ultimate Modal Bypass - Ignores text, strictly clicks the primary action button
+// The Ultimate Modal Bypass
 const clickModalPrimary = async (maxRetries = 5) => {
   for (let i = 0; i < maxRetries; i++) {
     const modal = document.querySelector(".artdeco-modal");
     if (modal) {
-      // Find the main action button (Send / Send without a note)
+      // Find the main action button
       const primaryBtn = modal.querySelector(
         "button.artdeco-button--primary",
       ) as HTMLElement;
@@ -125,9 +119,9 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(2500, 4500);
 
-        // Scope to the top profile card only
+        // Scope to the top profile card only (Broadened to catch UI variations)
         const TOP_CARD_SCOPE =
-          "main section.artdeco-card:first-of-type, .pv-top-card";
+          "main > section:first-child, .pv-top-card, .ph5.pb5";
 
         // 1. Try to find Connect on the top profile card
         let clickedConnect = await clickTarget("Connect", TOP_CARD_SCOPE, 3);
