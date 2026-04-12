@@ -7,8 +7,9 @@ const frontendHostname = new URL(FRONTEND_URL).hostname;
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
-    const token = localStorage.getItem("accessToken");
+    let token = localStorage.getItem("accessToken");
     if (token) {
+      token = token.replace(/['"]+/g, "");
       chrome.runtime.sendMessage({
         action: "SAVE_AUTH_TOKEN",
         token: token,
@@ -23,156 +24,121 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- YOUR ORIGINAL HOMING MISSILE (UNTOUCHED) ---
-const clickExactText = async (
-  text: string,
+// --- YOUR WORKING DOM HUNTER ---
+const clickTarget = async (
+  targetText: string,
   scopeSelector: string,
   maxRetries = 5,
 ) => {
+  const cleanTarget = targetText.toLowerCase();
+
   for (let i = 0; i < maxRetries; i++) {
     const scope = document.querySelector(scopeSelector) || document.body;
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item, span",
+        "button, [role='button'], .artdeco-dropdown__item, span, a",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
+      const text = (htmlEl.innerText || htmlEl.textContent || "").toLowerCase();
+      const aria = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
+
+      if (
+        text.includes(cleanTarget) ||
+        (cleanTarget === "connect" &&
+          aria.includes("invite") &&
+          aria.includes("connect"))
+      ) {
+        if (text.length > cleanTarget.length + 30) continue;
+        if (cleanTarget === "more" && text.includes("show")) continue;
+
         const style = window.getComputedStyle(htmlEl);
-        if (style.display !== "none" && style.visibility !== "hidden") {
+        const rect = htmlEl.getBoundingClientRect();
+
+        if (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0
+        ) {
           const clickable =
             (htmlEl.closest(
-              "button, [role='button'], .artdeco-dropdown__item",
+              "button, [role='button'], .artdeco-dropdown__item, a",
             ) as HTMLElement) || htmlEl;
-          console.log(`[AgentX] Found '${text}', clicking now...`);
+          console.log(`[AgentX] Found '${text || aria}', clicking now...`);
           clickable.click();
           return true;
         }
       }
     }
     console.log(
-      `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+      `[AgentX] '${targetText}' not found yet, retrying... (${i + 1}/${maxRetries})`,
     );
     await humanPause(800, 1200);
   }
   return false;
 };
 
-// --- YOUR EXACT NEW LOGIC: THE KEYBOARD STRIKE ---
-const isolatedModalClick = async (maxRetries = 8) => {
+// --- THE HAMMER LOOP ---
+// Smashes the button repeatedly until the modal actually closes
+const hammerButton = async (btn: HTMLElement) => {
+  const span = btn.querySelector("span");
+
+  for (let i = 0; i < 6; i++) {
+    // If the modal no longer exists, the click worked!
+    if (!document.querySelector(".artdeco-modal")) {
+      console.log("[AgentX] ✅ Modal vanished. Connection sent successfully.");
+      return true;
+    }
+
+    console.log(`[AgentX] 🔨 Hammer strike ${i + 1}...`);
+    if (span) span.click(); // Hit the inner text
+    btn.click(); // Hit the outer wrapper
+
+    await humanPause(500, 800);
+  }
+  return false;
+};
+
+// --- STRICT NOTE-LESS SENDER ---
+const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
     const modal = document.querySelector(".artdeco-modal");
 
     if (modal) {
-      // Find the primary blue button that has "Send" in the text
-      const buttons = Array.from(
-        modal.querySelectorAll("button.artdeco-button--primary"),
-      );
-      const sendBtn = buttons.find((b) =>
-        (b.textContent || "").toLowerCase().includes("send"),
+      // Find the button using either the aria-label OR the text content
+      let sendBtn = modal.querySelector(
+        "button[aria-label='Send without a note']",
       ) as HTMLElement;
 
-      if (sendBtn) {
-        console.log("[AgentX] Found 'Send'. Waiting 1.5s for UI to freeze...");
-        await humanPause(1500, 2000);
+      if (!sendBtn) {
+        sendBtn = Array.from(modal.querySelectorAll("button")).find((b) =>
+          (b.textContent || "").toLowerCase().includes("send without a note"),
+        ) as HTMLElement;
+      }
 
-        console.log("[AgentX] Executing Keyboard Strike...");
+      if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
+        console.log(
+          "[AgentX] ✅ Found 'Send without a note' button. Letting animation finish...",
+        );
+        await humanPause(1000, 1500); // Wait for the modal to fully stop moving
 
-        // 1. Physically focus the button (like hitting Tab)
-        sendBtn.focus();
-
-        // 2. Try a normal click just in case
-        sendBtn.click();
-
-        // 3. THE NUKE: Fire a raw 'Enter' keypress directly into the focused button
-        const enterDown = new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "Enter",
-          code: "Enter",
-          keyCode: 13,
-        });
-        const enterUp = new KeyboardEvent("keyup", {
-          bubbles: true,
-          cancelable: true,
-          key: "Enter",
-          code: "Enter",
-          keyCode: 13,
-        });
-
-        sendBtn.dispatchEvent(enterDown);
-        sendBtn.dispatchEvent(enterUp);
-
-        console.log("[AgentX] 💥 Keyboard Enter dispatched.");
+        await hammerButton(sendBtn);
         return true;
       }
     }
-    console.log(`[AgentX] Waiting for modal... (${i + 1}/${maxRetries})`);
+
+    console.log(
+      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
+    );
     await humanPause(1000, 1500);
   }
   return false;
 };
 
-// --- THE MASTER EXECUTION SEQUENCE ---
-const runConnectionSequence = async () => {
-  console.log("[AgentX] Initiating Autonomous Connection Sequence...");
-  try {
-    await humanPause(2000, 3000);
-
-    let clickedConnect = await clickExactText("Connect", "main", 3);
-
-    if (!clickedConnect) {
-      console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-      const clickedMore = await clickExactText("More", "main", 3);
-
-      if (clickedMore) {
-        await humanPause(1500, 2500);
-        clickedConnect = await clickExactText(
-          "Connect",
-          ".artdeco-dropdown__content--is-open",
-          5,
-        );
-      }
-    }
-
-    if (!clickedConnect) {
-      console.warn(
-        "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
-      );
-      return;
-    }
-
-    console.log("[AgentX] Waiting for modal to appear...");
-    await humanPause(2000, 3500);
-
-    const clickedSendWithoutNote = await isolatedModalClick(8);
-
-    if (clickedSendWithoutNote) {
-      console.log("[AgentX] ✅ Target successfully engaged.");
-    } else {
-      console.warn(
-        "[AgentX] ⚠️ Could not find or click the send button in the modal.",
-      );
-    }
-  } catch (error) {
-    console.error("[AgentX] Automation failed:", error);
-  }
-};
-
-// --- API-FREE TESTING LISTENER ---
-// This lets you trigger the bot locally without your backend
-window.addEventListener("message", (event) => {
-  if (event.data && event.data.action === "TEST_CONNECT") {
-    console.log("[AgentX] 🚨 MANUAL TEST INITIATED VIA CONSOLE 🚨");
-    runConnectionSequence();
-  }
-});
-
-// Standard Backend Listener
 chrome.runtime.onMessage.addListener(
-  (request: any, _sender: any, sendResponse: any) => {
+  async (request: any, _sender: any, sendResponse: any) => {
     if (request.action === "PING_DOM") {
       const name = document
         .querySelector(".text-heading-xlarge")
@@ -181,7 +147,45 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (request.action === "EXECUTE_CONNECT") {
-      runConnectionSequence();
+      console.log("[AgentX] Initiating Autonomous Connection Sequence...");
+
+      try {
+        await humanPause(3000, 4500);
+
+        let clickedConnect = await clickTarget("Connect", "main", 3);
+
+        if (!clickedConnect) {
+          console.log("[AgentX] Connect hidden. Opening 'More' menu...");
+          const clickedMore = await clickTarget("More", "main", 3);
+
+          if (clickedMore) {
+            await humanPause(1500, 2500);
+            clickedConnect = await clickTarget(
+              "Connect",
+              ".artdeco-dropdown__content--is-open",
+              5,
+            );
+          }
+        }
+
+        if (!clickedConnect) {
+          console.warn("[AgentX] ⚠️ Connect completely locked out. Moving on.");
+          return;
+        }
+
+        console.log("[AgentX] Waiting for modal to appear...");
+        await humanPause(2000, 3500);
+
+        const modalSuccess = await executeNoteLessSend(10);
+
+        if (!modalSuccess) {
+          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
+        } else {
+          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
+        }
+      } catch (error) {
+        console.error("[AgentX] Automation failed:", error);
+      }
     }
   },
 );
