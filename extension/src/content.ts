@@ -23,59 +23,84 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-const clickExactText = async (
-  text: string,
+// Aggressively strips out LinkedIn's hidden SVGs and whitespace formatting
+const cleanText = (text: string) => text.replace(/\s+/g, " ").trim();
+
+// The upgraded DOM Hunter for the profile page
+const clickTarget = async (
+  targetText: string,
   scopeSelector: string,
-  requirePrimary = false,
   maxRetries = 5,
 ) => {
   for (let i = 0; i < maxRetries; i++) {
-    // 1. Force the bot to wait until the specific menu or modal physically exists
     const scope = document.querySelector(scopeSelector);
 
     if (!scope) {
       console.log(
-        `[AgentX] Scope '${scopeSelector}' not found yet... (${i + 1}/${maxRetries})`,
+        `[AgentX] Scope '${scopeSelector}' not found... (${i + 1}/${maxRetries})`,
       );
       await humanPause(800, 1200);
       continue;
     }
 
+    // Broaden the search to grab nested spans inside dropdowns
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item",
+        "button, [role='button'], .artdeco-dropdown__item, span.display-flex",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      // textContent is safer than innerText for React animations
-      const elText = htmlEl.textContent
-        ? htmlEl.textContent.trim().replace(/\s+/g, " ")
-        : "";
+      const extractedText = cleanText(htmlEl.textContent || "");
 
-      if (elText === text) {
+      if (extractedText === targetText) {
         const rect = htmlEl.getBoundingClientRect();
 
-        // 2. It MUST be physically visible on the screen
+        // Ensure it is physically painted on the screen
         if (rect.width > 0 && rect.height > 0) {
-          // 3. THE LOCK: Prevent clicking background post "Send" buttons by requiring the primary class
-          if (
-            requirePrimary &&
-            !htmlEl.classList.contains("artdeco-button--primary")
-          ) {
-            continue;
-          }
-
-          console.log(`[AgentX] Found VISIBLE '${text}', clicking now...`);
-          htmlEl.click();
+          // Climb up to the actual clickable wrapper if we matched a nested span
+          const clickable =
+            (htmlEl.closest(
+              "button, [role='button'], .artdeco-dropdown__item",
+            ) as HTMLElement) || htmlEl;
+          console.log(
+            `[AgentX] Found VISIBLE '${targetText}', clicking now...`,
+          );
+          clickable.click();
           return true;
         }
       }
     }
 
     console.log(
-      `[AgentX] '${text}' not physically visible inside scope yet, retrying... (${i + 1}/${maxRetries})`,
+      `[AgentX] '${targetText}' not physically visible yet... (${i + 1}/${maxRetries})`,
+    );
+    await humanPause(800, 1200);
+  }
+  return false;
+};
+
+// The Ultimate Modal Bypass - Ignores text, strictly clicks the primary action button
+const clickModalPrimary = async (maxRetries = 5) => {
+  for (let i = 0; i < maxRetries; i++) {
+    const modal = document.querySelector(".artdeco-modal");
+    if (modal) {
+      // Find the main action button (Send / Send without a note)
+      const primaryBtn = modal.querySelector(
+        "button.artdeco-button--primary",
+      ) as HTMLElement;
+
+      if (primaryBtn) {
+        console.log(
+          "[AgentX] ✅ Primary modal button found. Executing note-less send...",
+        );
+        primaryBtn.click();
+        return true;
+      }
+    }
+    console.log(
+      `[AgentX] Modal or primary button not ready... (${i + 1}/${maxRetries})`,
     );
     await humanPause(800, 1200);
   }
@@ -97,35 +122,24 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(2500, 4500);
 
-        // The exact selector for the top profile card (Ignores "Similar People")
+        // Scope to the top profile card only
         const TOP_CARD_SCOPE =
-          ".ph5.pb5, .pv-top-card, main > section:first-child";
+          "main section.artdeco-card:first-of-type, .pv-top-card";
 
-        // 1. Try to find Connect ONLY on the top profile card
-        let clickedConnect = await clickExactText(
-          "Connect",
-          TOP_CARD_SCOPE,
-          false,
-          3,
-        );
+        // 1. Try to find Connect on the top profile card
+        let clickedConnect = await clickTarget("Connect", TOP_CARD_SCOPE, 3);
 
-        // 2. If no Connect, pop the More menu ONLY on the top profile card
+        // 2. If no Connect, pop the More menu
         if (!clickedConnect) {
           console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-          const clickedMore = await clickExactText(
-            "More",
-            TOP_CARD_SCOPE,
-            false,
-            3,
-          );
+          const clickedMore = await clickTarget("More", TOP_CARD_SCOPE, 3);
 
           if (clickedMore) {
             await humanPause(1500, 2500);
-            // 3. Hunt for Connect STRICTLY inside the physically open dropdown
-            clickedConnect = await clickExactText(
+            // 3. Hunt for Connect in the open dropdown
+            clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
-              false,
               5,
             );
           }
@@ -138,44 +152,16 @@ chrome.runtime.onMessage.addListener(
           return;
         }
 
-        // 4. Wait for the popup modal to physically render
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // 5. Hunt for the Premium Bypass button inside the modal
-        const clickedSendWithoutNote = await clickExactText(
-          "Send without a note",
-          ".artdeco-modal",
-          false,
-          5,
-        );
+        // 4. Execute the brute-force primary modal click
+        const modalSuccess = await clickModalPrimary(5);
 
-        if (clickedSendWithoutNote) {
-          console.log(
-            "[AgentX] ✅ Target successfully engaged via premium bypass.",
+        if (!modalSuccess) {
+          console.warn(
+            "[AgentX] ⚠️ Failed to locate the primary send button inside the modal.",
           );
-        } else {
-          console.log(
-            "[AgentX] 'Send without a note' not found. Trying standard 'Send'...",
-          );
-
-          // 6. REQUIRE PRIMARY = TRUE. This completely prevents the "Send Babita's Post" bug.
-          const clickedSend = await clickExactText(
-            "Send",
-            ".artdeco-modal",
-            true,
-            3,
-          );
-
-          if (clickedSend) {
-            console.log(
-              "[AgentX] ✅ Target successfully engaged via standard send.",
-            );
-          } else {
-            console.warn(
-              "[AgentX] ⚠️ Could not find any send button in the modal.",
-            );
-          }
         }
       } catch (error) {
         console.error("[AgentX] Automation failed:", error);
