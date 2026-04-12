@@ -24,7 +24,7 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// Your exact working DOM hunter
+// --- YOUR WORKING DOM HUNTER (Untouched) ---
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -71,7 +71,7 @@ const clickTarget = async (
               "button, [role='button'], .artdeco-dropdown__item, a",
             ) as HTMLElement) || htmlEl;
           console.log(`[AgentX] Found '${text || aria}', clicking now...`);
-          clickable.click(); // Safe, standard click
+          clickable.click();
           return true;
         }
       }
@@ -84,74 +84,46 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE FIX: VERIFICATION LOOP FOR THE MODAL ---
-const executeNoteLessSend = async (maxRetries = 7) => {
+// --- THE BRUTE FORCE MODAL BYPASS ---
+const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modal = document.querySelector(".artdeco-modal");
+    // Find all primary (blue) buttons inside any open modal
+    const buttons = Array.from(
+      document.querySelectorAll(
+        ".artdeco-modal button.artdeco-button--primary",
+      ),
+    );
 
-    if (!modal) {
-      console.log(
-        `[AgentX] Waiting for modal to render... (${i + 1}/${maxRetries})`,
-      );
-      await humanPause(1000, 1500);
-      continue;
-    }
+    for (const btn of buttons) {
+      const htmlBtn = btn as HTMLElement;
 
-    // Try finding the button via Aria Label or Primary Class
-    let sendBtn = modal.querySelector(
-      "button[aria-label='Send without a note']",
-    ) as HTMLButtonElement;
+      // Is it actually physically visible on the screen right now?
+      if (
+        htmlBtn.getBoundingClientRect().width > 0 &&
+        htmlBtn.getBoundingClientRect().height > 0
+      ) {
+        console.log("[AgentX] ✅ Found visible Primary Send Button!");
 
-    if (!sendBtn) {
-      // Fallback to searching the spans if aria-label is missing
-      const spans = Array.from(
-        modal.querySelectorAll("span.artdeco-button__text"),
-      );
-      for (const span of spans) {
-        if (
-          (span.textContent || "").trim().toLowerCase() ===
-          "send without a note"
-        ) {
-          sendBtn = span.closest("button") as HTMLButtonElement;
-          break;
-        }
-      }
-    }
-
-    if (!sendBtn) {
-      // Final fallback: just grab the primary blue button
-      sendBtn = modal.querySelector(
-        "button.artdeco-button--primary",
-      ) as HTMLButtonElement;
-    }
-
-    // If we found the button, ensure it's fully loaded and click it
-    if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
-      // LinkedIn sometimes disables the button for a split second while opening
-      if (sendBtn.disabled) {
-        console.log("[AgentX] Button is currently disabled, waiting...");
+        // Wait 1 second for the modal to completely finish its slide-up animation
         await humanPause(800, 1200);
-        continue;
-      }
 
-      console.log("[AgentX] ✅ Found Send button. Executing click...");
-      sendBtn.click();
+        // 1. Click the text span inside the button (Ember sometimes hides the listener here)
+        const span = htmlBtn.querySelector("span");
+        if (span) {
+          (span as HTMLElement).click();
+        }
 
-      // VERIFICATION: Did the click actually work?
-      await humanPause(1500, 2000);
-      if (!document.querySelector(".artdeco-modal")) {
-        console.log("[AgentX] ✅ Modal successfully closed. Send confirmed.");
+        // 2. Click the button wrapper itself
+        htmlBtn.click();
+
+        console.log("[AgentX] 💥 Final Click Executed.");
         return true;
-      } else {
-        console.warn("[AgentX] ⚠️ Click ignored by LinkedIn. Retrying...");
-        // Loop will naturally continue and click it again
       }
-    } else {
-      console.log(
-        `[AgentX] Waiting for buttons inside modal... (${i + 1}/${maxRetries})`,
-      );
     }
 
+    console.log(
+      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
+    );
     await humanPause(1000, 1500);
   }
   return false;
@@ -196,7 +168,7 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        const modalSuccess = await executeNoteLessSend(7);
+        const modalSuccess = await executeNoteLessSend(10);
 
         if (!modalSuccess) {
           console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
