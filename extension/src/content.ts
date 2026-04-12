@@ -25,17 +25,15 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE BOMB v3: Pointer Events + Coordinate Targeting + Internal Nuke
+// THE BOMB v3: Pointer Events + Coordinate Targeting
 const forceClick = async (el: HTMLElement) => {
   try {
     el.focus();
 
-    // Grab exact screen coordinates
     const rect = el.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
 
-    // Construct a highly realistic hardware pointer event
     const eventParams = {
       bubbles: true,
       cancelable: true,
@@ -53,10 +51,8 @@ const forceClick = async (el: HTMLElement) => {
     el.dispatchEvent(new PointerEvent("pointerdown", eventParams));
     el.dispatchEvent(new MouseEvent("mousedown", eventParams));
 
-    // Standard trigger
     el.click();
 
-    // Deep strike: find every span, icon, or SVG inside this button and click them all simultaneously
     const internalElements = el.querySelectorAll("*");
     internalElements.forEach((child) => {
       (child as HTMLElement).click();
@@ -66,13 +62,13 @@ const forceClick = async (el: HTMLElement) => {
     el.dispatchEvent(new MouseEvent("mouseup", eventParams));
     el.dispatchEvent(new MouseEvent("click", eventParams));
 
-    console.log("[AgentX] 💥 Coordinate Pointer-Strike dispatched.");
+    console.log("[AgentX] 💥 God-Mode Pointer-Strike dispatched.");
   } catch (error) {
     console.error("[AgentX] Force click failed:", error);
   }
 };
 
-// THE SNIPER DOM HUNTER: Skips massive wrappers, targets leaf nodes
+// THE GOD-MODE HUNTER: Built specifically from LinkedIn's raw DOM structure
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -81,10 +77,10 @@ const clickTarget = async (
   for (let i = 0; i < maxRetries; i++) {
     const scope = document.querySelector(scopeSelector) || document.body;
 
-    // Broadened scope to catch whatever random list-item format LinkedIn is using today
+    // Expanded to catch the specific <a> and <p> tags you found in the DOM
     const elements = Array.from(
       scope.querySelectorAll(
-        'button, [role="button"], .artdeco-dropdown__item, li, span.display-flex',
+        "button, [role='button'], [role='menuitem'], .artdeco-dropdown__item, a, p",
       ),
     );
 
@@ -93,19 +89,34 @@ const clickTarget = async (
 
       const ariaLabel = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
       const rawText = (htmlEl.textContent || "").toLowerCase();
-
       const strippedText = rawText.replace(/[^a-z]/g, "");
       const cleanTarget = targetText.toLowerCase().replace(/[^a-z]/g, "");
 
+      let isMatch = false;
+
+      // Strategy 1: The "Invite [Name] to connect" Aria-Label trick
       if (
+        targetText === "Connect" &&
+        ariaLabel.includes("invite") &&
+        ariaLabel.includes("connect")
+      ) {
+        isMatch = true;
+      }
+      // Strategy 2: Exact stripped text match
+      else if (strippedText === cleanTarget || ariaLabel === cleanTarget) {
+        isMatch = true;
+      }
+      // Strategy 3: Broad inclusion (Safeguarded against wrapper traps)
+      else if (
         ariaLabel.includes(targetText.toLowerCase()) ||
         strippedText.includes(cleanTarget)
       ) {
-        // THE FIX: If the element has a massive amount of text, it's a wrapper container (like the whole dropdown menu). Skip it.
-        if (strippedText.length > cleanTarget.length + 30) {
-          continue;
+        if (strippedText.length <= cleanTarget.length + 30) {
+          isMatch = true;
         }
+      }
 
+      if (isMatch) {
         // Prevent clicking "Show more" in about section
         if (
           targetText === "More" &&
@@ -118,9 +129,16 @@ const clickTarget = async (
 
         if (rect.width > 0 && rect.height > 0) {
           console.log(
-            `[AgentX] 🎯 Locked onto exact '${targetText}' element. Executing pointer-strike...`,
+            `[AgentX] 🎯 Locked onto exact '${targetText}' element...`,
           );
-          await forceClick(htmlEl);
+
+          // Climb up to the actual functional parent (the <a> or <button>) to ensure the click registers
+          const clickableEl =
+            (htmlEl.closest(
+              "a, button, [role='menuitem'], [role='button']",
+            ) as HTMLElement) || htmlEl;
+
+          await forceClick(clickableEl);
           return true;
         }
       }
@@ -192,7 +210,7 @@ chrome.runtime.onMessage.addListener(
 
           if (clickedMore) {
             await humanPause(2000, 3000);
-            // Target the open dropdown specifically
+            // Specifically target the open dropdown
             clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
