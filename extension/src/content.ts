@@ -7,8 +7,9 @@ const frontendHostname = new URL(FRONTEND_URL).hostname;
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
-    const token = localStorage.getItem("accessToken");
+    let token = localStorage.getItem("accessToken");
     if (token) {
+      token = token.replace(/['"]+/g, "");
       chrome.runtime.sendMessage({
         action: "SAVE_AUTH_TOKEN",
         token: token,
@@ -23,42 +24,111 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE HOMING MISSILE: It checks, waits, and checks again until the element actually exists
-const clickExactText = async (
-  text: string,
+// Back to your original, clean DOM hunter - upgraded to handle "+ Connect"
+const clickTarget = async (
+  targetText: string,
   scopeSelector: string,
   maxRetries = 5,
 ) => {
+  const cleanTarget = targetText.toLowerCase();
+
   for (let i = 0; i < maxRetries; i++) {
     const scope = document.querySelector(scopeSelector) || document.body;
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item, span",
+        "button, [role='button'], .artdeco-dropdown__item, span, a",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      // Strict exact match only
-      if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
+      const text = (htmlEl.innerText || htmlEl.textContent || "").toLowerCase();
+      const aria = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
+
+      // Matches "+ Connect", "Connect", or the dropdown aria-label
+      if (
+        text.includes(cleanTarget) ||
+        (cleanTarget === "connect" &&
+          aria.includes("invite") &&
+          aria.includes("connect"))
+      ) {
+        // Skip massive wrapper containers
+        if (text.length > cleanTarget.length + 30) continue;
+        // Skip the "Show more" button
+        if (cleanTarget === "more" && text.includes("show")) continue;
+
         const style = window.getComputedStyle(htmlEl);
-        // Stripped out the aggressive bounding box checks. Just checking if it's strictly hidden.
-        if (style.display !== "none" && style.visibility !== "hidden") {
+        const rect = htmlEl.getBoundingClientRect();
+
+        // Ensure it is visible
+        if (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0
+        ) {
           const clickable =
             (htmlEl.closest(
-              "button, [role='button'], .artdeco-dropdown__item",
+              "button, [role='button'], .artdeco-dropdown__item, a",
             ) as HTMLElement) || htmlEl;
-          console.log(`[AgentX] Found '${text}', clicking now...`);
-          clickable.click();
+          console.log(`[AgentX] Found '${text || aria}', clicking now...`);
+          clickable.click(); // Back to safe, standard click
           return true;
         }
       }
     }
-    // If it didn't find it, wait 1 second and try again (Handles LinkedIn's slow animations)
     console.log(
-      `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+      `[AgentX] '${targetText}' not found yet, retrying... (${i + 1}/${maxRetries})`,
     );
     await humanPause(800, 1200);
+  }
+  return false;
+};
+
+// Uses the EXACT html snippet you provided
+const executeNoteLessSend = async (maxRetries = 5) => {
+  for (let i = 0; i < maxRetries; i++) {
+    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
+    for (const modal of modals) {
+      if (modal.getBoundingClientRect().width === 0) continue;
+
+      // Strategy 1: Exact aria-label from your snippet
+      const ariaBtn = modal.querySelector(
+        "button[aria-label='Send without a note']",
+      ) as HTMLElement;
+      if (ariaBtn) {
+        console.log("[AgentX] ✅ Found 'Send without a note' via aria-label.");
+        ariaBtn.click();
+        return true;
+      }
+
+      // Strategy 2: Span text fallback
+      const spans = Array.from(
+        modal.querySelectorAll("span.artdeco-button__text"),
+      );
+      for (const span of spans) {
+        const text = (span.textContent || "").trim().toLowerCase();
+        if (text === "send without a note" || text === "send") {
+          console.log("[AgentX] ✅ Found send button via span text.");
+          const parentBtn = span.closest("button") as HTMLElement;
+          (parentBtn || (span as HTMLElement)).click();
+          return true;
+        }
+      }
+
+      // Strategy 3: Primary fallback
+      const primaryBtn = modal.querySelector(
+        "button.artdeco-button--primary",
+      ) as HTMLElement;
+      if (primaryBtn) {
+        console.log("[AgentX] ✅ Triggered via primary button fallback.");
+        primaryBtn.click();
+        return true;
+      }
+    }
+    console.log(
+      `[AgentX] Waiting for modal buttons... (${i + 1}/${maxRetries})`,
+    );
+    await humanPause(1000, 1500);
   }
   return false;
 };
@@ -76,21 +146,18 @@ chrome.runtime.onMessage.addListener(
       console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
       try {
-        await humanPause(2500, 4500);
+        await humanPause(3000, 4500);
 
-        // 1. Try to find Connect on the main row (retries 3 times)
-        let clickedConnect = await clickExactText("Connect", "main", 3);
+        // Using "main" as the scope, just like your old code
+        let clickedConnect = await clickTarget("Connect", "main", 3);
 
-        // 2. If no Connect, pop the More menu
         if (!clickedConnect) {
           console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-          const clickedMore = await clickExactText("More", "main", 3);
+          const clickedMore = await clickTarget("More", "main", 3);
 
           if (clickedMore) {
-            await humanPause(1500, 2500); // Wait for dropdown to physically open
-
-            // 3. Hunt for Connect STRICTLY inside the open dropdown (retries 5 times)
-            clickedConnect = await clickExactText(
+            await humanPause(1500, 2500);
+            clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
               5,
@@ -99,42 +166,19 @@ chrome.runtime.onMessage.addListener(
         }
 
         if (!clickedConnect) {
-          console.warn(
-            "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
-          );
+          console.warn("[AgentX] ⚠️ Connect completely locked out. Moving on.");
           return;
         }
 
-        // 4. Wait for the popup modal
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // 5. Hunt for the Premium Bypass button (retries 5 times)
-        const clickedSendWithoutNote = await clickExactText(
-          "Send without a note",
-          ".artdeco-modal",
-          5,
-        );
+        const modalSuccess = await executeNoteLessSend(5);
 
-        if (clickedSendWithoutNote) {
-          console.log(
-            "[AgentX] ✅ Target successfully engaged via premium bypass.",
-          );
+        if (!modalSuccess) {
+          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
         } else {
-          console.log(
-            "[AgentX] 'Send without a note' not found. Trying standard 'Send'...",
-          );
-          const clickedSend = await clickExactText("Send", ".artdeco-modal", 3);
-
-          if (clickedSend) {
-            console.log(
-              "[AgentX] ✅ Target successfully engaged via standard send.",
-            );
-          } else {
-            console.warn(
-              "[AgentX] ⚠️ Could not find any send button in the modal.",
-            );
-          }
+          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
         }
       } catch (error) {
         console.error("[AgentX] Automation failed:", error);
