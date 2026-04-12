@@ -80,23 +80,40 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE NEW "SEND WITH NOTE" MODAL HANDLER ---
+// --- THE REACT BUTTON FIX ---
+// This guarantees we click the inner text span, not just the outer wrapper div
+const clickReactButton = (button: HTMLElement) => {
+  if (!button) return;
+  const innerSpan = button.querySelector("span");
+  if (innerSpan) {
+    innerSpan.click(); // Hit the bullseye
+  }
+  button.click(); // Hit the wrapper just in case
+};
+
+// --- THE UPDATED MODAL HANDLER ---
 const executeModalAction = async (noteText: string, maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
+    const modal = document.querySelector(".artdeco-modal");
+    if (!modal) {
+      await humanPause(800, 1200);
+      continue;
+    }
+
     // STRATEGY 1: User has a note -> Click "Add a note"
     if (noteText) {
-      const addNoteBtn = document.querySelector(
+      const addNoteBtn = modal.querySelector(
         "button[aria-label='Add a note']",
       ) as HTMLElement;
 
       if (addNoteBtn && addNoteBtn.getBoundingClientRect().width > 0) {
         console.log("[AgentX] ✅ Found 'Add a note' button. Clicking...");
         await humanPause(500, 1000);
-        addNoteBtn.click();
+        clickReactButton(addNoteBtn);
 
         // Wait for text area to slide down
         await humanPause(1500, 2000);
-        const textarea = document.querySelector(
+        const textarea = modal.querySelector(
           "textarea[name='message'], textarea#custom-message",
         ) as HTMLTextAreaElement;
 
@@ -106,19 +123,19 @@ const executeModalAction = async (noteText: string, maxRetries = 10) => {
           );
           textarea.value = noteText;
 
-          // REACT TRAP: We must fake the input events so the "Send" button unlocks
+          // Trigger React state update so the Send button unlocks
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
           textarea.dispatchEvent(new Event("change", { bubbles: true }));
 
           await humanPause(1000, 1500);
 
           // Find the final primary "Send" button
-          const sendBtn = document.querySelector(
-            ".artdeco-modal button.artdeco-button--primary",
+          const sendBtn = modal.querySelector(
+            "button.artdeco-button--primary",
           ) as HTMLElement;
           if (sendBtn) {
             console.log("[AgentX] 💥 Hitting final Send button...");
-            sendBtn.click();
+            clickReactButton(sendBtn);
             return true;
           }
         }
@@ -127,14 +144,8 @@ const executeModalAction = async (noteText: string, maxRetries = 10) => {
 
     // STRATEGY 2: No note provided in backend -> Fallback to "Send without a note"
     if (!noteText) {
-      const sendWithoutNoteBtn = Array.from(
-        document.querySelectorAll(".artdeco-modal button"),
-      ).find(
-        (btn) =>
-          (btn.textContent || "")
-            .toLowerCase()
-            .includes("send without a note") ||
-          btn.getAttribute("aria-label") === "Send without a note",
+      const sendWithoutNoteBtn = modal.querySelector(
+        "button[aria-label='Send without a note']",
       ) as HTMLElement;
 
       if (
@@ -144,22 +155,21 @@ const executeModalAction = async (noteText: string, maxRetries = 10) => {
         console.log(
           "[AgentX] ✅ No note found in queue. Sending without a note...",
         );
-        await humanPause(800, 1200);
-        sendWithoutNoteBtn.click();
+        await humanPause(800, 1200); // Let the animation settle
+        clickReactButton(sendWithoutNoteBtn);
         return true;
       }
-    }
 
-    // STRATEGY 3: Ultimate Catch-All (If UI changes drastically)
-    const primaryBtn = document.querySelector(
-      ".artdeco-modal button.artdeco-button--primary",
-    ) as HTMLElement;
-    if (primaryBtn && primaryBtn.getBoundingClientRect().width > 0) {
-      const btnText = (primaryBtn.textContent || "").toLowerCase();
-      // Prevents accidentally clicking "Add a note" if it happens to be primary
-      if (btnText.includes("send")) {
-        console.log("[AgentX] ✅ Hitting generic primary Send button...");
-        primaryBtn.click();
+      // Generic fallback just in case LinkedIn alters the aria-label
+      const fallbackBtn = Array.from(modal.querySelectorAll("button")).find(
+        (btn) =>
+          (btn.textContent || "").toLowerCase().includes("send without a note"),
+      ) as HTMLElement;
+
+      if (fallbackBtn && fallbackBtn.getBoundingClientRect().width > 0) {
+        console.log("[AgentX] ✅ Using fallback to send without a note...");
+        await humanPause(800, 1200);
+        clickReactButton(fallbackBtn);
         return true;
       }
     }
