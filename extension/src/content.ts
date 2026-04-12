@@ -24,7 +24,7 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- YOUR WORKING DOM HUNTER (Untouched) ---
+// --- YOUR WORKING DOM HUNTER ---
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -80,49 +80,57 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE EMBER.JS BUTTON BYPASS ---
-const clickEmberButton = (btn: HTMLElement) => {
-  // Ember requires this exact sequence to register a physical click
-  const opts = { bubbles: true, cancelable: true, view: window };
-  btn.dispatchEvent(new MouseEvent("mousedown", opts));
-  btn.dispatchEvent(new MouseEvent("mouseup", opts));
-  btn.click();
+// --- THE HAMMER LOOP ---
+// Smashes the button repeatedly until the modal actually closes
+const hammerButton = async (btn: HTMLElement) => {
+  const span = btn.querySelector("span");
+
+  for (let i = 0; i < 6; i++) {
+    // If the modal no longer exists, the click worked!
+    if (!document.querySelector(".artdeco-modal")) {
+      console.log("[AgentX] ✅ Modal vanished. Connection sent successfully.");
+      return true;
+    }
+
+    console.log(`[AgentX] 🔨 Hammer strike ${i + 1}...`);
+    if (span) span.click(); // Hit the inner text
+    btn.click(); // Hit the outer wrapper
+
+    await humanPause(500, 800);
+  }
+  return false;
 };
 
-// --- THE STRICT "SEND WITHOUT NOTE" HANDLER ---
+// --- STRICT NOTE-LESS SENDER ---
 const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    // Look at all modals in case LinkedIn leaves a hidden ghost modal in the DOM
-    const modals = document.querySelectorAll(".artdeco-modal");
+    const modal = document.querySelector(".artdeco-modal");
 
-    for (const m of Array.from(modals)) {
-      const modal = m as HTMLElement;
+    if (modal) {
+      // Find the button using either the aria-label OR the text content
+      let sendBtn = modal.querySelector(
+        "button[aria-label='Send without a note']",
+      ) as HTMLElement;
 
-      // Ensure this is the active, visible modal
-      if (modal.getBoundingClientRect().width > 0) {
-        // Target the EXACT aria-label from your provided HTML snippet
-        const sendBtn = modal.querySelector(
-          "button[aria-label='Send without a note']",
+      if (!sendBtn) {
+        sendBtn = Array.from(modal.querySelectorAll("button")).find((b) =>
+          (b.textContent || "").toLowerCase().includes("send without a note"),
         ) as HTMLElement;
+      }
 
-        if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
-          console.log(
-            "[AgentX] ✅ Found 'Send without a note'. Letting animation settle...",
-          );
+      if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
+        console.log(
+          "[AgentX] ✅ Found 'Send without a note' button. Letting animation finish...",
+        );
+        await humanPause(1000, 1500); // Wait for the modal to fully stop moving
 
-          // Wait 1 second for the slide-up animation to completely finish
-          await humanPause(800, 1200);
-
-          console.log("[AgentX] 💥 Firing Ember-safe click...");
-          clickEmberButton(sendBtn);
-
-          return true;
-        }
+        await hammerButton(sendBtn);
+        return true;
       }
     }
 
     console.log(
-      `[AgentX] Waiting for Send button to appear... (${i + 1}/${maxRetries})`,
+      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
     );
     await humanPause(1000, 1500);
   }
@@ -168,7 +176,6 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // Forces the "Send Without Note" execution
         const modalSuccess = await executeNoteLessSend(10);
 
         if (!modalSuccess) {
