@@ -25,44 +25,27 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE BOMB: Bypasses React's synthetic event traps by faking raw mouse hardware events
+// THE BOMB v2: No scrolling (scrolling kills dropdowns), dual-layer penetration
 const forceClick = async (el: HTMLElement) => {
   try {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    await new Promise((r) => setTimeout(r, 600)); // Let the scroll animation settle
-
+    // REMOVED scrollIntoView. Nudging the page causes LinkedIn dropdowns to abort.
     el.focus();
 
+    const eventObj = { bubbles: true, cancelable: true, view: window };
+
     // Dispatch a complete physical mouse lifecycle
-    el.dispatchEvent(
-      new MouseEvent("mouseenter", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }),
-    );
-    el.dispatchEvent(
-      new MouseEvent("mouseover", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }),
-    );
-    el.dispatchEvent(
-      new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }),
-    );
-    el.click(); // Trigger native click alongside hardware events
-    el.dispatchEvent(
-      new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }),
-    );
+    el.dispatchEvent(new MouseEvent("mouseenter", eventObj));
+    el.dispatchEvent(new MouseEvent("mouseover", eventObj));
+    el.dispatchEvent(new MouseEvent("mousedown", eventObj));
+
+    // React trap: Sometimes the listener is on the container, sometimes on the inner span. Hit both.
+    el.click();
+    const innerSpan = el.querySelector("span");
+    if (innerSpan) {
+      innerSpan.click();
+    }
+
+    el.dispatchEvent(new MouseEvent("mouseup", eventObj));
 
     console.log("[AgentX] 💥 Hardware-level force-click dispatched.");
   } catch (error) {
@@ -91,7 +74,6 @@ const clickTarget = async (
       const ariaLabel = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
       const rawText = (htmlEl.textContent || "").toLowerCase();
 
-      // Regex strips everything except letters
       const strippedText = rawText.replace(/[^a-z]/g, "");
       const cleanTarget = targetText.toLowerCase().replace(/[^a-z]/g, "");
 
@@ -173,7 +155,6 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(3500, 5000);
 
-        // Strictly bound to the main profile section so it ignores the sidebar
         const MAIN_SCOPE = ".ph5.pb5, .pv-top-card, main > section:first-child";
 
         let clickedConnect = await clickTarget("Connect", MAIN_SCOPE, 4);
