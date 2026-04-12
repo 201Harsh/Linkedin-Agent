@@ -23,7 +23,6 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE HOMING MISSILE: It checks, waits, and checks again until the element actually exists
 const clickExactText = async (
   text: string,
   scopeSelector: string,
@@ -39,7 +38,6 @@ const clickExactText = async (
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      // Strict exact match only
       if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
         const style = window.getComputedStyle(htmlEl);
         // Stripped out the aggressive bounding box checks. Just checking if it's strictly hidden.
