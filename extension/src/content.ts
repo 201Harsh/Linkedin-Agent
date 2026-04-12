@@ -84,7 +84,6 @@ const clickTarget = async (
   return false;
 };
 
-// Uses the EXACT html snippet you provided
 // Uses the EXACT html snippet globally and waits for animation to settle
 const executeNoteLessSend = async (maxRetries = 7) => {
   for (let i = 0; i < maxRetries; i++) {
