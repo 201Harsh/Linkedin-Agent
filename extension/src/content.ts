@@ -17,7 +17,7 @@ if (window.location.hostname === frontendHostname) {
   }, 2000);
 }
 
-const humanPause = (min = 2000, max = 3000) => {
+const humanPause = (min = 2000, max = 5000) => {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
   return new Promise((resolve) => setTimeout(resolve, ms));
