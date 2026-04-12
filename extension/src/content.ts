@@ -17,7 +17,7 @@ if (window.location.hostname === frontendHostname) {
   }, 2000);
 }
 
-const humanPause = (min = 2000, max = 5000) => {
+const humanPause = (min = 2000, max = 3000) => {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,35 +26,56 @@ const humanPause = (min = 2000, max = 5000) => {
 const clickExactText = async (
   text: string,
   scopeSelector: string,
+  requirePrimary = false,
   maxRetries = 5,
 ) => {
   for (let i = 0; i < maxRetries; i++) {
-    const scope = document.querySelector(scopeSelector) || document.body;
+    // 1. Force the bot to wait until the specific menu or modal physically exists
+    const scope = document.querySelector(scopeSelector);
+
+    if (!scope) {
+      console.log(
+        `[AgentX] Scope '${scopeSelector}' not found yet... (${i + 1}/${maxRetries})`,
+      );
+      await humanPause(800, 1200);
+      continue;
+    }
+
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item, span",
+        "button, [role='button'], .artdeco-dropdown__item",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
-        const style = window.getComputedStyle(htmlEl);
+      // textContent is safer than innerText for React animations
+      const elText = htmlEl.textContent
+        ? htmlEl.textContent.trim().replace(/\s+/g, " ")
+        : "";
 
-        if (style.display !== "none" && style.visibility !== "hidden") {
-          const clickable =
-            (htmlEl.closest(
-              "button, [role='button'], .artdeco-dropdown__item",
-            ) as HTMLElement) || htmlEl;
-          console.log(`[AgentX] Found '${text}', clicking now...`);
-          clickable.click();
+      if (elText === text) {
+        const rect = htmlEl.getBoundingClientRect();
+
+        // 2. It MUST be physically visible on the screen
+        if (rect.width > 0 && rect.height > 0) {
+          // 3. THE LOCK: Prevent clicking background post "Send" buttons by requiring the primary class
+          if (
+            requirePrimary &&
+            !htmlEl.classList.contains("artdeco-button--primary")
+          ) {
+            continue;
+          }
+
+          console.log(`[AgentX] Found VISIBLE '${text}', clicking now...`);
+          htmlEl.click();
           return true;
         }
       }
     }
 
     console.log(
-      `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+      `[AgentX] '${text}' not physically visible inside scope yet, retrying... (${i + 1}/${maxRetries})`,
     );
     await humanPause(800, 1200);
   }
@@ -76,17 +97,35 @@ chrome.runtime.onMessage.addListener(
       try {
         await humanPause(2500, 4500);
 
-        let clickedConnect = await clickExactText("Connect", "main", 3);
+        // The exact selector for the top profile card (Ignores "Similar People")
+        const TOP_CARD_SCOPE =
+          ".ph5.pb5, .pv-top-card, main > section:first-child";
 
+        // 1. Try to find Connect ONLY on the top profile card
+        let clickedConnect = await clickExactText(
+          "Connect",
+          TOP_CARD_SCOPE,
+          false,
+          3,
+        );
+
+        // 2. If no Connect, pop the More menu ONLY on the top profile card
         if (!clickedConnect) {
           console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-          const clickedMore = await clickExactText("More", "main", 3);
+          const clickedMore = await clickExactText(
+            "More",
+            TOP_CARD_SCOPE,
+            false,
+            3,
+          );
 
           if (clickedMore) {
             await humanPause(1500, 2500);
+            // 3. Hunt for Connect STRICTLY inside the physically open dropdown
             clickedConnect = await clickExactText(
               "Connect",
               ".artdeco-dropdown__content--is-open",
+              false,
               5,
             );
           }
@@ -99,12 +138,15 @@ chrome.runtime.onMessage.addListener(
           return;
         }
 
+        // 4. Wait for the popup modal to physically render
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
+        // 5. Hunt for the Premium Bypass button inside the modal
         const clickedSendWithoutNote = await clickExactText(
           "Send without a note",
           ".artdeco-modal",
+          false,
           5,
         );
 
@@ -116,7 +158,14 @@ chrome.runtime.onMessage.addListener(
           console.log(
             "[AgentX] 'Send without a note' not found. Trying standard 'Send'...",
           );
-          const clickedSend = await clickExactText("Send", ".artdeco-modal", 3);
+
+          // 6. REQUIRE PRIMARY = TRUE. This completely prevents the "Send Babita's Post" bug.
+          const clickedSend = await clickExactText(
+            "Send",
+            ".artdeco-modal",
+            true,
+            3,
+          );
 
           if (clickedSend) {
             console.log(
