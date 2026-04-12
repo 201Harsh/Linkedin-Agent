@@ -1,103 +1,183 @@
-console.log("[AgentX] Background worker initialized.");
+console.log("[AgentX] Content Script injected successfully!");
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const FRONTEND_URL =
+  import.meta.env.VITE_FRONTEND_URL || "http://localhost:3000";
+const frontendHostname = new URL(FRONTEND_URL).hostname;
 
-chrome.runtime.onMessage.addListener((request: any) => {
-  if (request.action === "SAVE_AUTH_TOKEN") {
-    chrome.storage.local.get("agentx_token", (res) => {
-      if (res.agentx_token !== request.token) {
-        chrome.storage.local.set({ agentx_token: request.token }, () => {
-          console.log("[AgentX Background] Auth Token Synced.");
-        });
-      }
-    });
-  }
-});
-
-const pollQueue = async () => {
-  try {
-    const storage = await chrome.storage.local.get("agentx_token");
-    const token = storage.agentx_token;
-
-    if (!token) {
-      setTimeout(pollQueue, 10000);
-      return;
-    }
-
-    const response = await fetch(`${BACKEND_URL}/users/campaigns/queue/next`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (response.status === 401) {
-      console.error("[AgentX] Token expired (401). Purging dead token...");
-      await chrome.storage.local.remove("agentx_token");
-      setTimeout(pollQueue, 10000);
-      return;
-    }
-
-    if (response.status === 404) {
-      setTimeout(pollQueue, 10000);
-      return;
-    }
-
-    if (!response.ok) {
-      console.error("[AgentX] Polling failed! Status:", response.status);
-      setTimeout(pollQueue, 10000);
-      return;
-    }
-
-    const lead = await response.json();
-
-    if (lead && lead.url) {
-      console.log("[AgentX] Executing Authorized Campaign Target:", lead);
-
-      chrome.tabs.create({ url: lead.url, active: false }, (tab) => {
-        if (tab.id) {
-          let sequenceTriggered = false;
-
-          const failsafe = setTimeout(() => {
-            if (!sequenceTriggered) {
-              console.warn(
-                "[AgentX] ⚠️ Tab load timed out. Aborting and re-polling...",
-              );
-              pollQueue();
-            }
-          }, 20000);
-
-          chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-            if (tabId === tab.id && info.status === "complete") {
-              chrome.tabs.onUpdated.removeListener(listener);
-              sequenceTriggered = true;
-              clearTimeout(failsafe);
-
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, {
-                  action: "EXECUTE_CONNECT",
-                  note: lead.note,
-                });
-
-                // Wait 12 seconds for the content script to finish, then pull the next lead
-                setTimeout(pollQueue, 12000);
-              }, 4000);
-            }
-          });
-        } else {
-          setTimeout(pollQueue, 10000);
-        }
+if (window.location.hostname === frontendHostname) {
+  console.log("[AgentX] Monitoring Dashboard for Auth Token...");
+  setInterval(() => {
+    let token = localStorage.getItem("accessToken");
+    if (token) {
+      token = token.replace(/['"]+/g, "");
+      chrome.runtime.sendMessage({
+        action: "SAVE_AUTH_TOKEN",
+        token: token,
       });
-
-      return;
     }
-  } catch (error) {
-    console.error("[AgentX] Network error:", error);
-  }
+  }, 2000);
+}
 
-  setTimeout(pollQueue, 10000);
+const humanPause = (min = 2000, max = 5000) => {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  console.log(`[AgentX] 🤖 Human pause: waiting ${ms}ms...`);
+  return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// Start the engine
-pollQueue();
+// Back to your original, clean DOM hunter - upgraded to handle "+ Connect"
+const clickTarget = async (
+  targetText: string,
+  scopeSelector: string,
+  maxRetries = 5,
+) => {
+  const cleanTarget = targetText.toLowerCase();
+
+  for (let i = 0; i < maxRetries; i++) {
+    const scope = document.querySelector(scopeSelector) || document.body;
+    const elements = Array.from(
+      scope.querySelectorAll(
+        "button, [role='button'], .artdeco-dropdown__item, span, a",
+      ),
+    );
+
+    for (const el of elements) {
+      const htmlEl = el as HTMLElement;
+      const text = (htmlEl.innerText || htmlEl.textContent || "").toLowerCase();
+      const aria = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
+
+      // Matches "+ Connect", "Connect", or the dropdown aria-label
+      if (
+        text.includes(cleanTarget) ||
+        (cleanTarget === "connect" &&
+          aria.includes("invite") &&
+          aria.includes("connect"))
+      ) {
+        // Skip massive wrapper containers
+        if (text.length > cleanTarget.length + 30) continue;
+        // Skip the "Show more" button
+        if (cleanTarget === "more" && text.includes("show")) continue;
+
+        const style = window.getComputedStyle(htmlEl);
+        const rect = htmlEl.getBoundingClientRect();
+
+        // Ensure it is visible
+        if (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0
+        ) {
+          const clickable =
+            (htmlEl.closest(
+              "button, [role='button'], .artdeco-dropdown__item, a",
+            ) as HTMLElement) || htmlEl;
+          console.log(`[AgentX] Found '${text || aria}', clicking now...`);
+          clickable.click(); // Back to safe, standard click
+          return true;
+        }
+      }
+    }
+    console.log(
+      `[AgentX] '${targetText}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+    );
+    await humanPause(800, 1200);
+  }
+  return false;
+};
+
+// Uses the EXACT html snippet globally and waits for animation to settle
+const executeNoteLessSend = async (maxRetries = 7) => {
+  for (let i = 0; i < maxRetries; i++) {
+    // Strategy 1: Global search for the exact aria-label (Safest & most direct)
+    const ariaBtn = document.querySelector(
+      "button[aria-label='Send without a note']",
+    ) as HTMLElement;
+
+    // Ensure the button actually exists and has physical width on screen
+    if (ariaBtn && ariaBtn.getBoundingClientRect().width > 0) {
+      console.log(
+        "[AgentX] ✅ Found 'Send without a note'. Waiting for animation to settle...",
+      );
+      await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
+      ariaBtn.click();
+      return true;
+    }
+
+    // Strategy 2: Global search for the exact span text
+    const spans = Array.from(
+      document.querySelectorAll("span.artdeco-button__text"),
+    );
+    for (const span of spans) {
+      const text = (span.textContent || "").trim().toLowerCase();
+      if (text === "send without a note") {
+        const spanRect = span.getBoundingClientRect();
+        if (spanRect.width > 0) {
+          console.log("[AgentX] ✅ Found send button via span text.");
+          await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
+          const parentBtn = span.closest("button") as HTMLElement;
+          (parentBtn || (span as HTMLElement)).click();
+          return true;
+        }
+      }
+    }
+
+    console.log(
+      `[AgentX] Waiting for modal buttons... (${i + 1}/${maxRetries})`,
+    );
+    await humanPause(1000, 1500);
+  }
+  return false;
+};
+
+chrome.runtime.onMessage.addListener(
+  async (request: any, _sender: any, sendResponse: any) => {
+    if (request.action === "PING_DOM") {
+      const name = document
+        .querySelector(".text-heading-xlarge")
+        ?.textContent?.trim();
+      sendResponse({ name });
+    }
+
+    if (request.action === "EXECUTE_CONNECT") {
+      console.log("[AgentX] Initiating Autonomous Connection Sequence...");
+
+      try {
+        await humanPause(3000, 4500);
+
+        // Using "main" as the scope, just like your old code
+        let clickedConnect = await clickTarget("Connect", "main", 3);
+
+        if (!clickedConnect) {
+          console.log("[AgentX] Connect hidden. Opening 'More' menu...");
+          const clickedMore = await clickTarget("More", "main", 3);
+
+          if (clickedMore) {
+            await humanPause(1500, 2500);
+            clickedConnect = await clickTarget(
+              "Connect",
+              ".artdeco-dropdown__content--is-open",
+              5,
+            );
+          }
+        }
+
+        if (!clickedConnect) {
+          console.warn("[AgentX] ⚠️ Connect completely locked out. Moving on.");
+          return;
+        }
+
+        console.log("[AgentX] Waiting for modal to appear...");
+        await humanPause(2000, 3500);
+
+        const modalSuccess = await executeNoteLessSend(5);
+
+        if (!modalSuccess) {
+          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
+        } else {
+          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
+        }
+      } catch (error) {
+        console.error("[AgentX] Automation failed:", error);
+      }
+    }
+  },
+);
