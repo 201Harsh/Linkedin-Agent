@@ -110,7 +110,7 @@ const executeNoteLessSend = async (maxRetries = 7) => {
       console.log(
         "[AgentX] ✅ Found 'Send without a note' via aria-label. Waiting for animation to settle...",
       );
-      await humanPause(800, 1200); // CRITICAL: Let the fade-in animation finish
+      await humanPause(800, 1000); // CRITICAL: Let the fade-in animation finish
       forceModalClick(ariaBtn);
       return true;
     }
