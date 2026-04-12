@@ -24,7 +24,7 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// Back to your original, clean DOM hunter - upgraded to handle "+ Connect"
+// --- YOUR WORKING DOM HUNTER ---
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -84,21 +84,34 @@ const clickTarget = async (
   return false;
 };
 
-// Uses the EXACT html snippet globally and waits for animation to settle
+// --- NEW: PUNCHES THROUGH REACT MODAL EVENT BLOCKERS ---
+const forceModalClick = (el: HTMLElement) => {
+  try {
+    el.focus();
+    const eventObj = { bubbles: true, cancelable: true, view: window };
+    el.dispatchEvent(new MouseEvent("mousedown", eventObj));
+    el.dispatchEvent(new MouseEvent("mouseup", eventObj));
+    el.click();
+    console.log("[AgentX] 💥 Forced click dispatched on modal button.");
+  } catch (e) {
+    console.error("[AgentX] Forced click failed:", e);
+  }
+};
+
+// --- UPGRADED MODAL BYPASS ---
 const executeNoteLessSend = async (maxRetries = 7) => {
   for (let i = 0; i < maxRetries; i++) {
-    // Strategy 1: Global search for the exact aria-label (Safest & most direct)
+    // Strategy 1: Global search for the exact aria-label
     const ariaBtn = document.querySelector(
       "button[aria-label='Send without a note']",
     ) as HTMLElement;
 
-    // Ensure the button actually exists and has physical width on screen
     if (ariaBtn && ariaBtn.getBoundingClientRect().width > 0) {
       console.log(
-        "[AgentX] ✅ Found 'Send without a note'. Waiting for animation to settle...",
+        "[AgentX] ✅ Found 'Send without a note' via aria-label. Waiting for animation to settle...",
       );
-      await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
-      ariaBtn.click();
+      await humanPause(800, 1200); // CRITICAL: Let the fade-in animation finish
+      forceModalClick(ariaBtn);
       return true;
     }
 
@@ -111,12 +124,30 @@ const executeNoteLessSend = async (maxRetries = 7) => {
       if (text === "send without a note") {
         const spanRect = span.getBoundingClientRect();
         if (spanRect.width > 0) {
-          console.log("[AgentX] ✅ Found send button via span text.");
-          await humanPause(600, 1000); // CRITICAL: Let the fade-in animation finish
+          console.log(
+            "[AgentX] ✅ Found send button via span text. Waiting for animation to settle...",
+          );
+          await humanPause(800, 1200); // CRITICAL: Let the fade-in animation finish
           const parentBtn = span.closest("button") as HTMLElement;
-          (parentBtn || (span as HTMLElement)).click();
+          forceModalClick(parentBtn || (span as HTMLElement));
           return true;
         }
+      }
+    }
+
+    // Strategy 3: Primary button fallback
+    const modal = document.querySelector(".artdeco-modal");
+    if (modal) {
+      const primaryBtn = modal.querySelector(
+        "button.artdeco-button--primary",
+      ) as HTMLElement;
+      if (primaryBtn && primaryBtn.getBoundingClientRect().width > 0) {
+        console.log(
+          "[AgentX] ✅ Found primary send button fallback. Waiting for animation to settle...",
+        );
+        await humanPause(800, 1200);
+        forceModalClick(primaryBtn);
+        return true;
       }
     }
 
