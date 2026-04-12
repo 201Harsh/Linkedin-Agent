@@ -25,35 +25,54 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// THE BOMB v2: No scrolling (scrolling kills dropdowns), dual-layer penetration
+// THE BOMB v3: Pointer Events + Coordinate Targeting + Internal Nuke
 const forceClick = async (el: HTMLElement) => {
   try {
-    // REMOVED scrollIntoView. Nudging the page causes LinkedIn dropdowns to abort.
     el.focus();
 
-    const eventObj = { bubbles: true, cancelable: true, view: window };
+    // Grab exact screen coordinates
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
 
-    // Dispatch a complete physical mouse lifecycle
-    el.dispatchEvent(new MouseEvent("mouseenter", eventObj));
-    el.dispatchEvent(new MouseEvent("mouseover", eventObj));
-    el.dispatchEvent(new MouseEvent("mousedown", eventObj));
+    // Construct a highly realistic hardware pointer event
+    const eventParams = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      pointerId: 1,
+      pointerType: "mouse",
+    };
 
-    // React trap: Sometimes the listener is on the container, sometimes on the inner span. Hit both.
+    el.dispatchEvent(new PointerEvent("pointerenter", eventParams));
+    el.dispatchEvent(new MouseEvent("mouseenter", eventParams));
+    el.dispatchEvent(new PointerEvent("pointerover", eventParams));
+    el.dispatchEvent(new MouseEvent("mouseover", eventParams));
+    el.dispatchEvent(new PointerEvent("pointerdown", eventParams));
+    el.dispatchEvent(new MouseEvent("mousedown", eventParams));
+
+    // Standard trigger
     el.click();
-    const innerSpan = el.querySelector("span");
-    if (innerSpan) {
-      innerSpan.click();
-    }
 
-    el.dispatchEvent(new MouseEvent("mouseup", eventObj));
+    // Deep strike: find every span, icon, or SVG inside this button and click them all simultaneously
+    const internalElements = el.querySelectorAll("*");
+    internalElements.forEach((child) => {
+      (child as HTMLElement).click();
+    });
 
-    console.log("[AgentX] 💥 Hardware-level force-click dispatched.");
+    el.dispatchEvent(new PointerEvent("pointerup", eventParams));
+    el.dispatchEvent(new MouseEvent("mouseup", eventParams));
+    el.dispatchEvent(new MouseEvent("click", eventParams));
+
+    console.log("[AgentX] 💥 Coordinate Pointer-Strike dispatched.");
   } catch (error) {
     console.error("[AgentX] Force click failed:", error);
   }
 };
 
-// THE TITAN DOM HUNTER
+// THE SNIPER DOM HUNTER: Skips massive wrappers, targets leaf nodes
 const clickTarget = async (
   targetText: string,
   scopeSelector: string,
@@ -62,9 +81,10 @@ const clickTarget = async (
   for (let i = 0; i < maxRetries; i++) {
     const scope = document.querySelector(scopeSelector) || document.body;
 
+    // Broadened scope to catch whatever random list-item format LinkedIn is using today
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item",
+        'button, [role="button"], .artdeco-dropdown__item, li, span.display-flex',
       ),
     );
 
@@ -81,7 +101,12 @@ const clickTarget = async (
         ariaLabel.includes(targetText.toLowerCase()) ||
         strippedText.includes(cleanTarget)
       ) {
-        // Prevent accidental clicks on "Show more" in about section
+        // THE FIX: If the element has a massive amount of text, it's a wrapper container (like the whole dropdown menu). Skip it.
+        if (strippedText.length > cleanTarget.length + 30) {
+          continue;
+        }
+
+        // Prevent clicking "Show more" in about section
         if (
           targetText === "More" &&
           (ariaLabel.includes("show") || strippedText.includes("showmore"))
@@ -93,7 +118,7 @@ const clickTarget = async (
 
         if (rect.width > 0 && rect.height > 0) {
           console.log(
-            `[AgentX] 🎯 Locked onto '${targetText}', executing force-click...`,
+            `[AgentX] 🎯 Locked onto exact '${targetText}' element. Executing pointer-strike...`,
           );
           await forceClick(htmlEl);
           return true;
@@ -167,6 +192,7 @@ chrome.runtime.onMessage.addListener(
 
           if (clickedMore) {
             await humanPause(2000, 3000);
+            // Target the open dropdown specifically
             clickedConnect = await clickTarget(
               "Connect",
               ".artdeco-dropdown__content--is-open",
