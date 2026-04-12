@@ -4,11 +4,14 @@ const FRONTEND_URL =
   import.meta.env.VITE_FRONTEND_URL || "http://localhost:3000";
 const frontendHostname = new URL(FRONTEND_URL).hostname;
 
+// Token Sync Engine
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
   setInterval(() => {
-    const token = localStorage.getItem("accessToken");
+    let token = localStorage.getItem("accessToken");
     if (token) {
+      // Strip any accidental JSON quotes that might cause 401s
+      token = token.replace(/['"]+/g, "");
       chrome.runtime.sendMessage({
         action: "SAVE_AUTH_TOKEN",
         token: token,
