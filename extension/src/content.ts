@@ -82,17 +82,15 @@ const clickTarget = async (
 
 // --- THE EMBER.JS BUTTON BYPASS ---
 const clickEmberButton = (btn: HTMLElement) => {
-  // Ember requires this exact sequence to register a physical click
   const opts = { bubbles: true, cancelable: true, view: window };
   btn.dispatchEvent(new MouseEvent("mousedown", opts));
   btn.dispatchEvent(new MouseEvent("mouseup", opts));
   btn.click();
 };
 
-// --- THE STRICT "SEND WITHOUT NOTE" HANDLER ---
-const executeNoteLessSend = async (maxRetries = 10) => {
+// --- THE "SEND WITH NOTE" EXECUTION FLOW ---
+const executeSendWithNote = async (noteText: string, maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    // Look at all modals in case LinkedIn leaves a hidden ghost modal in the DOM
     const modals = document.querySelectorAll(".artdeco-modal");
 
     for (const m of Array.from(modals)) {
@@ -100,29 +98,62 @@ const executeNoteLessSend = async (maxRetries = 10) => {
 
       // Ensure this is the active, visible modal
       if (modal.getBoundingClientRect().width > 0) {
-        // Target the EXACT aria-label from your provided HTML snippet
-        const sendBtn = modal.querySelector(
-          "button[aria-label='Send without a note']",
+        // Step 1: Find and click "Add a note"
+        const addNoteBtn = modal.querySelector(
+          "button[aria-label='Add a note']",
         ) as HTMLElement;
 
-        if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
+        if (addNoteBtn && addNoteBtn.getBoundingClientRect().width > 0) {
           console.log(
-            "[AgentX] ✅ Found 'Send without a note'. Letting animation settle...",
+            "[AgentX] ✅ Found 'Add a note'. Letting animation settle...",
           );
-
-          // Wait 1 second for the slide-up animation to completely finish
           await humanPause(800, 1200);
+          clickEmberButton(addNoteBtn);
 
-          console.log("[AgentX] 💥 Firing Ember-safe click...");
-          clickEmberButton(sendBtn);
+          // Step 2: Wait for Text Area to slide down
+          console.log("[AgentX] Waiting for text box...");
+          await humanPause(1500, 2000);
+          const textarea = modal.querySelector(
+            "textarea[name='message'], textarea#custom-message",
+          ) as HTMLTextAreaElement;
 
-          return true;
+          if (textarea) {
+            console.log("[AgentX] ✅ Textbox found. Injecting AI Note...");
+
+            // Fallback note just in case the queue didn't pass one
+            const finalNote =
+              noteText ||
+              "Hi, I'd love to connect and learn more about your work!";
+
+            textarea.value = finalNote;
+
+            // Step 3: Trick React into unlocking the Send button
+            textarea.dispatchEvent(new Event("input", { bubbles: true }));
+            textarea.dispatchEvent(new Event("change", { bubbles: true }));
+
+            await humanPause(1000, 1500);
+
+            // Step 4: Find and click the final 'Send' button
+            const sendBtn = modal.querySelector(
+              "button.artdeco-button--primary",
+            ) as HTMLButtonElement;
+
+            if (sendBtn && !sendBtn.disabled) {
+              console.log("[AgentX] 💥 Firing final Ember Send...");
+              clickEmberButton(sendBtn);
+              return true;
+            } else {
+              console.warn(
+                "[AgentX] ⚠️ Send button is still disabled or missing.",
+              );
+            }
+          }
         }
       }
     }
 
     console.log(
-      `[AgentX] Waiting for Send button to appear... (${i + 1}/${maxRetries})`,
+      `[AgentX] Waiting for modal buttons... (${i + 1}/${maxRetries})`,
     );
     await humanPause(1000, 1500);
   }
@@ -168,8 +199,8 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        // Forces the "Send Without Note" execution
-        const modalSuccess = await executeNoteLessSend(10);
+        // Execute the Add Note sequence with the payload from your backend
+        const modalSuccess = await executeSendWithNote(request.note, 10);
 
         if (!modalSuccess) {
           console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
