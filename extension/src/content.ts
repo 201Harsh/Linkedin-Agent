@@ -45,22 +45,18 @@ const clickTarget = async (
       const text = (htmlEl.innerText || htmlEl.textContent || "").toLowerCase();
       const aria = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
 
-      // Matches "+ Connect", "Connect", or the dropdown aria-label
       if (
         text.includes(cleanTarget) ||
         (cleanTarget === "connect" &&
           aria.includes("invite") &&
           aria.includes("connect"))
       ) {
-        // Skip massive wrapper containers
         if (text.length > cleanTarget.length + 30) continue;
-        // Skip the "Show more" button
         if (cleanTarget === "more" && text.includes("show")) continue;
 
         const style = window.getComputedStyle(htmlEl);
         const rect = htmlEl.getBoundingClientRect();
 
-        // Ensure it is visible
         if (
           style.display !== "none" &&
           style.visibility !== "hidden" &&
@@ -84,39 +80,86 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE BRUTE FORCE MODAL BYPASS ---
-const executeNoteLessSend = async (maxRetries = 10) => {
+// --- THE NEW "SEND WITH NOTE" MODAL HANDLER ---
+const executeModalAction = async (noteText: string, maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    // Find all primary (blue) buttons inside any open modal
-    const buttons = Array.from(
-      document.querySelectorAll(
-        ".artdeco-modal button.artdeco-button--primary",
-      ),
-    );
+    // STRATEGY 1: User has a note -> Click "Add a note"
+    if (noteText) {
+      const addNoteBtn = document.querySelector(
+        "button[aria-label='Add a note']",
+      ) as HTMLElement;
 
-    for (const btn of buttons) {
-      const htmlBtn = btn as HTMLElement;
+      if (addNoteBtn && addNoteBtn.getBoundingClientRect().width > 0) {
+        console.log("[AgentX] ✅ Found 'Add a note' button. Clicking...");
+        await humanPause(500, 1000);
+        addNoteBtn.click();
 
-      // Is it actually physically visible on the screen right now?
-      if (
-        htmlBtn.getBoundingClientRect().width > 0 &&
-        htmlBtn.getBoundingClientRect().height > 0
-      ) {
-        console.log("[AgentX] ✅ Found visible Primary Send Button!");
+        // Wait for text area to slide down
+        await humanPause(1500, 2000);
+        const textarea = document.querySelector(
+          "textarea[name='message'], textarea#custom-message",
+        ) as HTMLTextAreaElement;
 
-        // Wait 1 second for the modal to completely finish its slide-up animation
-        await humanPause(800, 1200);
+        if (textarea) {
+          console.log(
+            "[AgentX] ✅ Text box found. Injecting personalized note...",
+          );
+          textarea.value = noteText;
 
-        // 1. Click the text span inside the button (Ember sometimes hides the listener here)
-        const span = htmlBtn.querySelector("span");
-        if (span) {
-          (span as HTMLElement).click();
+          // REACT TRAP: We must fake the input events so the "Send" button unlocks
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          textarea.dispatchEvent(new Event("change", { bubbles: true }));
+
+          await humanPause(1000, 1500);
+
+          // Find the final primary "Send" button
+          const sendBtn = document.querySelector(
+            ".artdeco-modal button.artdeco-button--primary",
+          ) as HTMLElement;
+          if (sendBtn) {
+            console.log("[AgentX] 💥 Hitting final Send button...");
+            sendBtn.click();
+            return true;
+          }
         }
+      }
+    }
 
-        // 2. Click the button wrapper itself
-        htmlBtn.click();
+    // STRATEGY 2: No note provided in backend -> Fallback to "Send without a note"
+    if (!noteText) {
+      const sendWithoutNoteBtn = Array.from(
+        document.querySelectorAll(".artdeco-modal button"),
+      ).find(
+        (btn) =>
+          (btn.textContent || "")
+            .toLowerCase()
+            .includes("send without a note") ||
+          btn.getAttribute("aria-label") === "Send without a note",
+      ) as HTMLElement;
 
-        console.log("[AgentX] 💥 Final Click Executed.");
+      if (
+        sendWithoutNoteBtn &&
+        sendWithoutNoteBtn.getBoundingClientRect().width > 0
+      ) {
+        console.log(
+          "[AgentX] ✅ No note found in queue. Sending without a note...",
+        );
+        await humanPause(800, 1200);
+        sendWithoutNoteBtn.click();
+        return true;
+      }
+    }
+
+    // STRATEGY 3: Ultimate Catch-All (If UI changes drastically)
+    const primaryBtn = document.querySelector(
+      ".artdeco-modal button.artdeco-button--primary",
+    ) as HTMLElement;
+    if (primaryBtn && primaryBtn.getBoundingClientRect().width > 0) {
+      const btnText = (primaryBtn.textContent || "").toLowerCase();
+      // Prevents accidentally clicking "Add a note" if it happens to be primary
+      if (btnText.includes("send")) {
+        console.log("[AgentX] ✅ Hitting generic primary Send button...");
+        primaryBtn.click();
         return true;
       }
     }
@@ -168,7 +211,8 @@ chrome.runtime.onMessage.addListener(
         console.log("[AgentX] Waiting for modal to appear...");
         await humanPause(2000, 3500);
 
-        const modalSuccess = await executeNoteLessSend(10);
+        // PASS THE NOTE TEXT INTO THE FUNCTION
+        const modalSuccess = await executeModalAction(request.note, 10);
 
         if (!modalSuccess) {
           console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
