@@ -1,14 +1,14 @@
-console.log("[AgentX] Background worker initialized.");
+console.log("AgentX Background worker initialized.");
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
-chrome.runtime.onMessage.addListener((request: any) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "SAVE_AUTH_TOKEN") {
     chrome.storage.local.get("agentx_token", (res) => {
       if (res.agentx_token !== request.token) {
         chrome.storage.local.set({ agentx_token: request.token }, () => {
           console.log(
-            "[AgentX Background] New Auth Token secured in local storage.",
+            "[AgentX Background] Auth Token secured in local storage.",
           );
         });
       }
@@ -21,7 +21,6 @@ setInterval(async () => {
     const storage = await chrome.storage.local.get("agentx_token");
     const token = storage.agentx_token;
 
-    // If no token exists, quietly wait. Don't spam errors.
     if (!token) return;
 
     const response = await fetch(`${BACKEND_URL}/users/campaigns/queue/next`, {
@@ -32,14 +31,7 @@ setInterval(async () => {
       },
     });
 
-    // SELF-HEALING LOGIC: If token is expired/invalid, nuke it.
-    if (response.status === 401) {
-      console.error("[AgentX] Token expired (401). Purging dead token...");
-      await chrome.storage.local.remove("agentx_token");
-      return;
-    }
-
-    if (response.status === 404) return; // Queue empty, normal behavior
+    if (response.status === 404) return;
 
     if (!response.ok) {
       console.error("[AgentX] Polling failed! Status:", response.status);
