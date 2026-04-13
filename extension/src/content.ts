@@ -80,135 +80,54 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE DIAGNOSTIC MODAL SENDER ---
+// --- BULLETPROOF NOTE-LESS SENDER ---
 const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
-    const activeModal = modals.find((m) => m.getBoundingClientRect().width > 0);
+    const modal = document.querySelector(".artdeco-modal");
 
-    if (activeModal) {
-      let sendBtn = activeModal.querySelector(
-        "button[aria-label='Send without a note']",
-      ) as HTMLButtonElement;
-
-      if (!sendBtn) {
-        sendBtn = Array.from(activeModal.querySelectorAll("button")).find((b) =>
-          (b.textContent || "").toLowerCase().includes("send without a note"),
-        ) as HTMLButtonElement;
-      }
+    if (modal) {
+      // Find the primary blue button
+      const buttons = Array.from(
+        modal.querySelectorAll("button.artdeco-button--primary"),
+      );
+      const sendBtn = buttons.find((b) =>
+        (b.textContent || "").toLowerCase().includes("send"),
+      ) as HTMLElement;
 
       if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
-        console.log("\n--------------------------------------------------");
-        console.log("[DEBUG] ✅ ACTIVE 'SEND' BUTTON LOCATED!");
-        console.log(`[DEBUG] Disabled State: ${sendBtn.disabled}`);
-        console.log(`[DEBUG] Classes: ${sendBtn.className}`);
-        console.log(`[DEBUG] HTML: ${sendBtn.outerHTML}`);
-        console.log("--------------------------------------------------\n");
+        console.log(
+          "[AgentX] ✅ Found 'Send' button. Letting animation finish...",
+        );
 
-        await humanPause(1500, 2000); // Let UI freeze
+        // Let the modal completely finish sliding onto the screen
+        await humanPause(1000, 1500);
 
-        // THE SPY LISTENER
-        sendBtn.addEventListener("click", (e) => {
-          console.log(
-            `🚨 [DEBUG SPY] CLICK EVENT TRIGGERED! (isTrusted: ${e.isTrusted})`,
-          );
-        });
+        console.log("[AgentX] 💥 Clicking Send...");
 
-        console.log("[DEBUG] 💥 FIRING CLICK COMMANDS NOW...");
+        // Force-unlock the button just in case LinkedIn disabled it
+        sendBtn.removeAttribute("disabled");
 
-        try {
-          const span = sendBtn.querySelector("span");
-          if (span) {
-            console.log("[DEBUG] -> Clicking inner span...");
-            span.click();
-          }
-          console.log("[DEBUG] -> Clicking outer button...");
-          sendBtn.click();
-          console.log("[DEBUG] -> Javascript executed without crashing.");
-        } catch (err) {
-          console.error(
-            "❌ [FATAL DEBUG] JAVASCRIPT CRASHED DURING CLICK:",
-            err,
-          );
-        }
+        // Click the inner text specifically
+        const span = sendBtn.querySelector("span");
+        if (span) span.click();
 
-        console.log("[DEBUG] Waiting 2 seconds to see if modal closes...");
-        await humanPause(2000, 2500);
+        // Click the main wrapper
+        sendBtn.click();
 
-        const rectAfter = sendBtn.getBoundingClientRect();
-        if (
-          rectAfter.width === 0 ||
-          !document.querySelector(".artdeco-modal")
-        ) {
-          console.log("[DEBUG] ✅ MODAL VANISHED. CONNECTION SENT.");
-          return true;
-        } else {
-          console.warn(
-            "❌ [FATAL DEBUG] MODAL IS STILL OPEN. LINKEDIN IGNORED THE CLICK.",
-          );
-          // We return true here just to stop the loop from spamming for debugging purposes
-          return true;
-        }
+        return true;
       }
     }
 
     console.log(
-      `[AgentX] Waiting for active modal buttons to render... (${i + 1}/${maxRetries})`,
+      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
     );
     await humanPause(1000, 1500);
   }
   return false;
 };
 
-// --- THE MASTER SEQUENCE ---
-const runConnectionSequence = async () => {
-  console.log("[AgentX] Initiating Autonomous Connection Sequence...");
-  try {
-    await humanPause(2000, 3000);
-
-    let clickedConnect = await clickTarget("Connect", "main", 3);
-
-    if (!clickedConnect) {
-      console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-      const clickedMore = await clickTarget("More", "main", 3);
-
-      if (clickedMore) {
-        await humanPause(1500, 2500);
-        clickedConnect = await clickTarget(
-          "Connect",
-          ".artdeco-dropdown__content--is-open",
-          5,
-        );
-      }
-    }
-
-    if (!clickedConnect) {
-      console.warn(
-        "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
-      );
-      return;
-    }
-
-    console.log("[AgentX] Waiting for modal to appear...");
-    await humanPause(2000, 3500);
-
-    await executeNoteLessSend(10);
-  } catch (error) {
-    console.error("[AgentX] Automation failed:", error);
-  }
-};
-
-// --- API-FREE TESTING HOTKEY (CTRL + SHIFT + Y) ---
-document.addEventListener("keydown", (e) => {
-  // Press Ctrl + Shift + Y to trigger the bot manually
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "y") {
-    console.log("[AgentX] 🚨 MANUAL OVERRIDE TRIGGERED VIA HOTKEY 🚨");
-    runConnectionSequence();
-  }
-});
-
 chrome.runtime.onMessage.addListener(
-  (request: any, _sender: any, sendResponse: any) => {
+  async (request: any, _sender: any, sendResponse: any) => {
     if (request.action === "PING_DOM") {
       const name = document
         .querySelector(".text-heading-xlarge")
@@ -217,7 +136,45 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (request.action === "EXECUTE_CONNECT") {
-      runConnectionSequence();
+      console.log("[AgentX] Initiating Autonomous Connection Sequence...");
+
+      try {
+        await humanPause(3000, 4500);
+
+        let clickedConnect = await clickTarget("Connect", "main", 3);
+
+        if (!clickedConnect) {
+          console.log("[AgentX] Connect hidden. Opening 'More' menu...");
+          const clickedMore = await clickTarget("More", "main", 3);
+
+          if (clickedMore) {
+            await humanPause(1500, 2500);
+            clickedConnect = await clickTarget(
+              "Connect",
+              ".artdeco-dropdown__content--is-open",
+              5,
+            );
+          }
+        }
+
+        if (!clickedConnect) {
+          console.warn("[AgentX] ⚠️ Connect completely locked out. Moving on.");
+          return;
+        }
+
+        console.log("[AgentX] Waiting for modal to appear...");
+        await humanPause(2000, 3500);
+
+        const modalSuccess = await executeNoteLessSend(10);
+
+        if (!modalSuccess) {
+          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
+        } else {
+          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
+        }
+      } catch (error) {
+        console.error("[AgentX] Automation failed:", error);
+      }
     }
   },
 );
