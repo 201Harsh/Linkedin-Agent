@@ -6,14 +6,29 @@ const frontendHostname = new URL(FRONTEND_URL).hostname;
 
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
-  setInterval(() => {
-    let token = localStorage.getItem("accessToken");
-    if (token) {
-      token = token.replace(/['"]+/g, "");
-      chrome.runtime.sendMessage({
-        action: "SAVE_AUTH_TOKEN",
-        token: token,
-      });
+
+  // THE KILL SWITCH: If the extension reloads, this stops the ERR_FAILED spam.
+  const syncInterval = setInterval(() => {
+    try {
+      let token = localStorage.getItem("accessToken");
+      if (token) {
+        token = token.replace(/['"]+/g, "");
+        chrome.runtime.sendMessage(
+          { action: "SAVE_AUTH_TOKEN", token: token },
+          (response) => {
+            // If Chrome throws an "invalid context" error, kill the loop immediately
+            if (chrome.runtime.lastError) {
+              console.warn(
+                "[AgentX] Extension reloaded. Killing zombie background loop.",
+              );
+              clearInterval(syncInterval);
+            }
+          },
+        );
+      }
+    } catch (err) {
+      console.warn("[AgentX] Context invalidated. Shutting down loop.");
+      clearInterval(syncInterval);
     }
   }, 2000);
 }
@@ -80,40 +95,57 @@ const clickTarget = async (
   return false;
 };
 
-// --- BULLETPROOF NOTE-LESS SENDER ---
+// --- THE HAMMER LOOP ---
+const hammerButton = async (btn: HTMLElement) => {
+  const span = btn.querySelector("span");
+
+  for (let i = 0; i < 6; i++) {
+    // If the button is completely gone or its width is 0, it means it successfully clicked!
+    const rect = btn.getBoundingClientRect();
+    if (
+      rect.width === 0 ||
+      rect.height === 0 ||
+      !document.querySelector(".artdeco-modal")
+    ) {
+      console.log("[AgentX] ✅ Modal vanished. Connection sent successfully.");
+      return true;
+    }
+
+    console.log(`[AgentX] 🔨 Hammer strike ${i + 1}...`);
+
+    if (span) span.click();
+    btn.click();
+
+    await humanPause(800, 1200);
+  }
+  return false;
+};
+
+// --- STRICT NOTE-LESS SENDER ---
 const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modal = document.querySelector(".artdeco-modal");
+    // Only grab the modal that is currently visible on the screen
+    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
+    const activeModal = modals.find((m) => m.getBoundingClientRect().width > 0);
 
-    if (modal) {
-      // Find the primary blue button
-      const buttons = Array.from(
-        modal.querySelectorAll("button.artdeco-button--primary"),
-      );
-      const sendBtn = buttons.find((b) =>
-        (b.textContent || "").toLowerCase().includes("send"),
+    if (activeModal) {
+      let sendBtn = activeModal.querySelector(
+        "button[aria-label='Send without a note']",
       ) as HTMLElement;
+
+      if (!sendBtn) {
+        sendBtn = Array.from(activeModal.querySelectorAll("button")).find((b) =>
+          (b.textContent || "").toLowerCase().includes("send without a note"),
+        ) as HTMLElement;
+      }
 
       if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
         console.log(
-          "[AgentX] ✅ Found 'Send' button. Letting animation finish...",
+          "[AgentX] ✅ Found 'Send without a note' button. Letting animation finish...",
         );
+        await humanPause(1500, 2000);
 
-        // Let the modal completely finish sliding onto the screen
-        await humanPause(1000, 1500);
-
-        console.log("[AgentX] 💥 Clicking Send...");
-
-        // Force-unlock the button just in case LinkedIn disabled it
-        sendBtn.removeAttribute("disabled");
-
-        // Click the inner text specifically
-        const span = sendBtn.querySelector("span");
-        if (span) span.click();
-
-        // Click the main wrapper
-        sendBtn.click();
-
+        await hammerButton(sendBtn);
         return true;
       }
     }
@@ -178,3 +210,12 @@ chrome.runtime.onMessage.addListener(
     }
   },
 );
+
+// --- API-FREE TESTING HOTKEY ---
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.action === "TEST_CONNECT") {
+    console.log("[AgentX] 🚨 MANUAL TEST INITIATED VIA CONSOLE 🚨");
+    // Trigger the flow manually
+    window.postMessage({ action: "EXECUTE_CONNECT" }, "*");
+  }
+});
