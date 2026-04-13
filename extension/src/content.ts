@@ -80,23 +80,32 @@ const clickTarget = async (
   return false;
 };
 
-// --- THE HAMMER LOOP ---
-// Smashes the button repeatedly until the modal actually closes
+// --- THE FIXED HAMMER LOOP ---
 const hammerButton = async (btn: HTMLElement) => {
   const span = btn.querySelector("span");
 
   for (let i = 0; i < 6; i++) {
-    // If the modal no longer exists, the click worked!
-    if (!document.querySelector(".artdeco-modal")) {
-      console.log("[AgentX] ✅ Modal vanished. Connection sent successfully.");
+    // THE FIX: Check if the button itself has become invisible/detached.
+    // If width is 0, the modal successfully closed!
+    const rect = btn.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      console.log(
+        "[AgentX] ✅ Button vanished from screen. Connection sent successfully.",
+      );
       return true;
     }
 
     console.log(`[AgentX] 🔨 Hammer strike ${i + 1}...`);
-    if (span) span.click(); // Hit the inner text
-    btn.click(); // Hit the outer wrapper
 
-    await humanPause(500, 800);
+    // Dispatch native-like mouse events just to be completely bulletproof
+    const eventOpts = { bubbles: true, cancelable: true, view: window };
+    btn.dispatchEvent(new MouseEvent("mousedown", eventOpts));
+    btn.dispatchEvent(new MouseEvent("mouseup", eventOpts));
+
+    if (span) span.click();
+    btn.click();
+
+    await humanPause(800, 1200);
   }
   return false;
 };
@@ -104,16 +113,17 @@ const hammerButton = async (btn: HTMLElement) => {
 // --- STRICT NOTE-LESS SENDER ---
 const executeNoteLessSend = async (maxRetries = 10) => {
   for (let i = 0; i < maxRetries; i++) {
-    const modal = document.querySelector(".artdeco-modal");
+    // THE FIX: Grab ALL modals, and only look at the one that is physically visible
+    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
+    const activeModal = modals.find((m) => m.getBoundingClientRect().width > 0);
 
-    if (modal) {
-      // Find the button using either the aria-label OR the text content
-      let sendBtn = modal.querySelector(
+    if (activeModal) {
+      let sendBtn = activeModal.querySelector(
         "button[aria-label='Send without a note']",
       ) as HTMLElement;
 
       if (!sendBtn) {
-        sendBtn = Array.from(modal.querySelectorAll("button")).find((b) =>
+        sendBtn = Array.from(activeModal.querySelectorAll("button")).find((b) =>
           (b.textContent || "").toLowerCase().includes("send without a note"),
         ) as HTMLElement;
       }
@@ -122,7 +132,7 @@ const executeNoteLessSend = async (maxRetries = 10) => {
         console.log(
           "[AgentX] ✅ Found 'Send without a note' button. Letting animation finish...",
         );
-        await humanPause(1000, 1500); // Wait for the modal to fully stop moving
+        await humanPause(1500, 2000); // 1.5 second wait to guarantee UI is frozen
 
         await hammerButton(sendBtn);
         return true;
@@ -130,7 +140,7 @@ const executeNoteLessSend = async (maxRetries = 10) => {
     }
 
     console.log(
-      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
+      `[AgentX] Waiting for active modal buttons to render... (${i + 1}/${maxRetries})`,
     );
     await humanPause(1000, 1500);
   }
