@@ -6,29 +6,18 @@ const frontendHostname = new URL(FRONTEND_URL).hostname;
 
 if (window.location.hostname === frontendHostname) {
   console.log("[AgentX] Monitoring Dashboard for Auth Token...");
-
-  // THE KILL SWITCH: If the extension reloads, this stops the ERR_FAILED spam.
   const syncInterval = setInterval(() => {
-    try {
-      let token = localStorage.getItem("accessToken");
-      if (token) {
-        token = token.replace(/['"]+/g, "");
-        chrome.runtime.sendMessage(
-          { action: "SAVE_AUTH_TOKEN", token: token },
-          (response) => {
-            // If Chrome throws an "invalid context" error, kill the loop immediately
-            if (chrome.runtime.lastError) {
-              console.warn(
-                "[AgentX] Extension reloaded. Killing zombie background loop.",
-              );
-              clearInterval(syncInterval);
-            }
-          },
-        );
-      }
-    } catch (err) {
-      console.warn("[AgentX] Context invalidated. Shutting down loop.");
+    // Safety check so it doesn't crash if the extension reloads
+    if (!chrome.runtime?.id) {
       clearInterval(syncInterval);
+      return;
+    }
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      chrome.runtime.sendMessage({
+        action: "SAVE_AUTH_TOKEN",
+        token: token,
+      });
     }
   }, 2000);
 }
@@ -39,125 +28,126 @@ const humanPause = (min = 2000, max = 5000) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-// --- YOUR WORKING DOM HUNTER ---
-const clickTarget = async (
-  targetText: string,
+// --- YOUR EXACT ORIGINAL HOMING MISSILE ---
+const clickExactText = async (
+  text: string,
   scopeSelector: string,
   maxRetries = 5,
 ) => {
-  const cleanTarget = targetText.toLowerCase();
-
   for (let i = 0; i < maxRetries; i++) {
     const scope = document.querySelector(scopeSelector) || document.body;
     const elements = Array.from(
       scope.querySelectorAll(
-        "button, [role='button'], .artdeco-dropdown__item, span, a",
+        "button, [role='button'], .artdeco-dropdown__item, span",
       ),
     );
 
     for (const el of elements) {
       const htmlEl = el as HTMLElement;
-      const text = (htmlEl.innerText || htmlEl.textContent || "").toLowerCase();
-      const aria = (htmlEl.getAttribute("aria-label") || "").toLowerCase();
-
-      if (
-        text.includes(cleanTarget) ||
-        (cleanTarget === "connect" &&
-          aria.includes("invite") &&
-          aria.includes("connect"))
-      ) {
-        if (text.length > cleanTarget.length + 30) continue;
-        if (cleanTarget === "more" && text.includes("show")) continue;
-
+      // Strict exact match only
+      if (htmlEl.innerText && htmlEl.innerText.trim() === text) {
         const style = window.getComputedStyle(htmlEl);
-        const rect = htmlEl.getBoundingClientRect();
-
-        if (
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          rect.width > 0
-        ) {
+        // Stripped out the aggressive bounding box checks. Just checking if it's strictly hidden.
+        if (style.display !== "none" && style.visibility !== "hidden") {
           const clickable =
             (htmlEl.closest(
-              "button, [role='button'], .artdeco-dropdown__item, a",
+              "button, [role='button'], .artdeco-dropdown__item",
             ) as HTMLElement) || htmlEl;
-          console.log(`[AgentX] Found '${text || aria}', clicking now...`);
+          console.log(`[AgentX] Found '${text}', clicking now...`);
           clickable.click();
           return true;
         }
       }
     }
+    // If it didn't find it, wait 1 second and try again (Handles LinkedIn's slow animations)
     console.log(
-      `[AgentX] '${targetText}' not found yet, retrying... (${i + 1}/${maxRetries})`,
+      `[AgentX] '${text}' not found yet, retrying... (${i + 1}/${maxRetries})`,
     );
     await humanPause(800, 1200);
   }
   return false;
 };
 
-// --- THE HAMMER LOOP ---
-const hammerButton = async (btn: HTMLElement) => {
-  const span = btn.querySelector("span");
+// --- YOUR EXACT ORIGINAL EXECUTION SEQUENCE ---
+const runConnectionSequence = async () => {
+  console.log("[AgentX] Initiating Autonomous Connection Sequence...");
 
-  for (let i = 0; i < 6; i++) {
-    // If the button is completely gone or its width is 0, it means it successfully clicked!
-    const rect = btn.getBoundingClientRect();
-    if (
-      rect.width === 0 ||
-      rect.height === 0 ||
-      !document.querySelector(".artdeco-modal")
-    ) {
-      console.log("[AgentX] ✅ Modal vanished. Connection sent successfully.");
-      return true;
-    }
+  try {
+    await humanPause(2500, 4500);
 
-    console.log(`[AgentX] 🔨 Hammer strike ${i + 1}...`);
+    // 1. Try to find Connect on the main row (retries 3 times)
+    let clickedConnect = await clickExactText("Connect", "main", 3);
 
-    if (span) span.click();
-    btn.click();
+    // 2. If no Connect, pop the More menu
+    if (!clickedConnect) {
+      console.log("[AgentX] Connect hidden. Opening 'More' menu...");
+      const clickedMore = await clickExactText("More", "main", 3);
 
-    await humanPause(800, 1200);
-  }
-  return false;
-};
+      if (clickedMore) {
+        await humanPause(1500, 2500); // Wait for dropdown to physically open
 
-// --- STRICT NOTE-LESS SENDER ---
-const executeNoteLessSend = async (maxRetries = 10) => {
-  for (let i = 0; i < maxRetries; i++) {
-    // Only grab the modal that is currently visible on the screen
-    const modals = Array.from(document.querySelectorAll(".artdeco-modal"));
-    const activeModal = modals.find((m) => m.getBoundingClientRect().width > 0);
-
-    if (activeModal) {
-      let sendBtn = activeModal.querySelector(
-        "button[aria-label='Send without a note']",
-      ) as HTMLElement;
-
-      if (!sendBtn) {
-        sendBtn = Array.from(activeModal.querySelectorAll("button")).find((b) =>
-          (b.textContent || "").toLowerCase().includes("send without a note"),
-        ) as HTMLElement;
-      }
-
-      if (sendBtn && sendBtn.getBoundingClientRect().width > 0) {
-        console.log(
-          "[AgentX] ✅ Found 'Send without a note' button. Letting animation finish...",
+        // 3. Hunt for Connect STRICTLY inside the open dropdown (retries 5 times)
+        clickedConnect = await clickExactText(
+          "Connect",
+          ".artdeco-dropdown__content--is-open",
+          5,
         );
-        await humanPause(1500, 2000);
-
-        await hammerButton(sendBtn);
-        return true;
       }
     }
 
-    console.log(
-      `[AgentX] Waiting for modal buttons to render... (${i + 1}/${maxRetries})`,
+    if (!clickedConnect) {
+      console.warn(
+        "[AgentX] ⚠️ Connect button is completely locked out. Moving on.",
+      );
+      return;
+    }
+
+    // 4. Wait for the popup modal
+    console.log("[AgentX] Waiting for modal to appear...");
+    await humanPause(2000, 3500);
+
+    // 5. Hunt for the Premium Bypass button (retries 5 times)
+    const clickedSendWithoutNote = await clickExactText(
+      "Send without a note",
+      ".artdeco-modal",
+      5,
     );
-    await humanPause(1000, 1500);
+
+    if (clickedSendWithoutNote) {
+      console.log(
+        "[AgentX] ✅ Target successfully engaged via premium bypass.",
+      );
+    } else {
+      console.log(
+        "[AgentX] 'Send without a note' not found. Trying standard 'Send'...",
+      );
+      const clickedSend = await clickExactText("Send", ".artdeco-modal", 3);
+
+      if (clickedSend) {
+        console.log(
+          "[AgentX] ✅ Target successfully engaged via standard send.",
+        );
+      } else {
+        console.warn(
+          "[AgentX] ⚠️ Could not find any send button in the modal.",
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[AgentX] Automation failed:", error);
   }
-  return false;
 };
 
+// --- API-FREE TESTING LISTENER ---
+// Trigger this from the Chrome Console to test WITHOUT pinging your backend
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.action === "TEST_CONNECT") {
+    console.log("[AgentX] 🚨 MANUAL TEST INITIATED VIA CONSOLE 🚨");
+    runConnectionSequence();
+  }
+});
+
+// Standard Backend Listener
 chrome.runtime.onMessage.addListener(
   async (request: any, _sender: any, sendResponse: any) => {
     if (request.action === "PING_DOM") {
@@ -168,54 +158,7 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (request.action === "EXECUTE_CONNECT") {
-      console.log("[AgentX] Initiating Autonomous Connection Sequence...");
-
-      try {
-        await humanPause(3000, 4500);
-
-        let clickedConnect = await clickTarget("Connect", "main", 3);
-
-        if (!clickedConnect) {
-          console.log("[AgentX] Connect hidden. Opening 'More' menu...");
-          const clickedMore = await clickTarget("More", "main", 3);
-
-          if (clickedMore) {
-            await humanPause(1500, 2500);
-            clickedConnect = await clickTarget(
-              "Connect",
-              ".artdeco-dropdown__content--is-open",
-              5,
-            );
-          }
-        }
-
-        if (!clickedConnect) {
-          console.warn("[AgentX] ⚠️ Connect completely locked out. Moving on.");
-          return;
-        }
-
-        console.log("[AgentX] Waiting for modal to appear...");
-        await humanPause(2000, 3500);
-
-        const modalSuccess = await executeNoteLessSend(10);
-
-        if (!modalSuccess) {
-          console.warn("[AgentX] ⚠️ Failed to click send inside the modal.");
-        } else {
-          console.log("[AgentX] 🚀 SEQUENCE COMPLETE.");
-        }
-      } catch (error) {
-        console.error("[AgentX] Automation failed:", error);
-      }
+      runConnectionSequence();
     }
   },
 );
-
-// --- API-FREE TESTING HOTKEY ---
-window.addEventListener("message", (event) => {
-  if (event.data && event.data.action === "TEST_CONNECT") {
-    console.log("[AgentX] 🚨 MANUAL TEST INITIATED VIA CONSOLE 🚨");
-    // Trigger the flow manually
-    window.postMessage({ action: "EXECUTE_CONNECT" }, "*");
-  }
-});
