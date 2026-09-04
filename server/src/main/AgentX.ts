@@ -1,21 +1,31 @@
 import { GoogleGenAI } from "@google/genai";
-import axios from "axios";
+import { tavily } from "@tavily/core";
 
 const ai = new GoogleGenAI(
   process.env.GEMINI_API_KEY ? { apiKey: process.env.GEMINI_API_KEY } : {},
 );
 
-async function searchLinkedInTavily(query: string) {
-  console.log(`[Tavily] Executing search: ${query}`);
+const tavilyClient = tavily({
+  apiKey: process.env.TAVILY_API_KEY || "",
+});
+
+async function searchLinkedInTavily(rawQuery: string) {
+  // Strip site: operators so Tavily uses native includeDomains for blazing fast lookup
+  const cleanQuery = rawQuery.replace(/site:\S+/gi, "").trim();
+  console.log(`[Tavily] ⚡ Fast search: "${cleanQuery || rawQuery}"`);
+
   try {
-    const response = await axios.post("https://api.tavily.com/search", {
-      api_key: process.env.TAVILY_API_KEY,
-      query: query,
-      search_depth: "basic",
-      max_results: 3,
+    const response = await tavilyClient.search(cleanQuery || rawQuery, {
+      searchDepth: "fast",
+      includeDomains: ["linkedin.com"],
+      maxResults: 3,
+      includeAnswer: false,
+      includeImages: false,
+      includeRawContent: false,
     });
 
-    return response.data.results.map((r: any) => ({
+    return (response.results || []).map((r: any) => ({
+      title: r.title,
       url: r.url,
       content: r.content,
     }));
@@ -95,14 +105,14 @@ CRITICAL RULES:
           type: "function",
           name: "search_linkedin",
           description:
-            "Searches the web for LinkedIn profiles. Use this for ANY internet search request.",
+            "Searches LinkedIn profiles. Pass concise search keywords (e.g. 'Technical Recruiter Web Developer India').",
           parameters: {
             type: "object",
             properties: {
               search_query: {
                 type: "string",
                 description:
-                  "The Google Dork query. Format: site:linkedin.com/in/ target location",
+                  "Concise keywords including role, skills, and location.",
               },
             },
             required: ["search_query"],
