@@ -44,174 +44,309 @@ const humanScroll = async () => {
   } catch (e) {}
 };
 
-// 3. Reliable click dispatcher
-const simulateHumanClick = (element: HTMLElement) => {
-  const isInsideModal = !!element.closest(".artdeco-modal, [role='dialog']");
+// 3. Helper to check if an element is visible in the viewport/DOM
+const isElementVisible = (el: HTMLElement): boolean => {
+  if (!el || !el.isConnected) return false;
+  const style = window.getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0"
+  ) {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
 
-  // Only scroll if NOT inside a modal to prevent background page jumping
+// 4. Exact coordinate click dispatcher ("click the exact point")
+const clickExactPoint = (element: HTMLElement): boolean => {
+  if (!element) return false;
+
+  const isInsideModal = !!element.closest(
+    ".artdeco-modal, [role='dialog'], dialog, [aria-modal='true'], [class*='modal']"
+  );
+
+  // Only scroll into view if NOT inside a modal to avoid jittering the background page
   if (!isInsideModal) {
     try {
       element.scrollIntoView({ behavior: "instant", block: "center" });
     } catch (e) {}
   }
 
-  try {
-    element.focus();
-  } catch (e) {}
-
-  const span = (element.querySelector("span") as HTMLElement) || element;
   const rect = element.getBoundingClientRect();
   const clientX =
     rect.width > 0 ? rect.left + rect.width / 2 : window.innerWidth / 2;
   const clientY =
     rect.height > 0 ? rect.top + rect.height / 2 : window.innerHeight / 2;
+  const screenX = window.screenX + clientX;
+  const screenY = window.screenY + clientY;
 
-  const eventOpts: MouseEventInit = {
+  // Resolve the exact topmost element at these coordinates (e.g. inner span or button itself)
+  const hitTarget =
+    (document.elementFromPoint(clientX, clientY) as HTMLElement) || element;
+
+  console.log(
+    `[AgentX] 🎯 Clicking EXACT POINT (${Math.round(clientX)}, ${Math.round(clientY)}) on <${hitTarget.tagName.toLowerCase()}> inside <${element.tagName.toLowerCase()}>`
+  );
+
+  try {
+    element.focus();
+  } catch (e) {}
+  try {
+    hitTarget.focus();
+  } catch (e) {}
+
+  const mouseInit: MouseEventInit = {
     bubbles: true,
     cancelable: true,
     view: window,
     clientX,
     clientY,
-    buttons: 1,
+    screenX,
+    screenY,
   };
 
-  const dispatch = (target: EventTarget, evt: Event) => {
-    try {
-      target.dispatchEvent(evt);
-    } catch (e) {}
+  const pointerInit: PointerEventInit = {
+    ...mouseInit,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+    width: 1,
+    height: 1,
   };
 
-  // 1. Pointer events
+  // 1. Cursor movement to target
   try {
-    dispatch(element, new PointerEvent("pointerdown", eventOpts));
-    dispatch(span, new PointerEvent("pointerdown", eventOpts));
+    hitTarget.dispatchEvent(new PointerEvent("pointermove", { ...pointerInit, buttons: 0 }));
+    hitTarget.dispatchEvent(new MouseEvent("mousemove", { ...mouseInit, buttons: 0 }));
   } catch (e) {}
 
-  // 2. Mouse down
-  dispatch(element, new MouseEvent("mousedown", eventOpts));
-  dispatch(span, new MouseEvent("mousedown", eventOpts));
-
-  // 3. Pointer up
+  // 2. Pointer down & mouse down (button 0, buttons 1)
   try {
-    dispatch(element, new PointerEvent("pointerup", eventOpts));
-    dispatch(span, new PointerEvent("pointerup", eventOpts));
+    hitTarget.dispatchEvent(new PointerEvent("pointerdown", { ...pointerInit, button: 0, buttons: 1 }));
+  } catch (e) {}
+  try {
+    hitTarget.dispatchEvent(new MouseEvent("mousedown", { ...mouseInit, button: 0, buttons: 1 }));
   } catch (e) {}
 
-  // 4. Mouse up
-  dispatch(element, new MouseEvent("mouseup", eventOpts));
-  dispatch(span, new MouseEvent("mouseup", eventOpts));
-
-  // 5. Mouse click
-  dispatch(element, new MouseEvent("click", eventOpts));
-  dispatch(span, new MouseEvent("click", eventOpts));
-
-  // 6. Native DOM clicks
+  // 3. Pointer up & mouse up (button 0, buttons 0)
   try {
-    if (typeof (element as any).click === "function") {
-      element.click();
+    hitTarget.dispatchEvent(new PointerEvent("pointerup", { ...pointerInit, button: 0, buttons: 0 }));
+  } catch (e) {}
+  try {
+    hitTarget.dispatchEvent(new MouseEvent("mouseup", { ...mouseInit, button: 0, buttons: 0 }));
+  } catch (e) {}
+
+  // 4. Click event (button 0, buttons 0)
+  try {
+    hitTarget.dispatchEvent(new MouseEvent("click", { ...mouseInit, button: 0, buttons: 0 }));
+  } catch (e) {}
+
+  // 5. Native DOM click triggers on both the hit target and the button container
+  try {
+    if (typeof hitTarget.click === "function") {
+      hitTarget.click();
     }
   } catch (e) {}
 
   try {
-    if (span !== element && typeof (span as any).click === "function") {
-      span.click();
+    if (hitTarget !== element && typeof (element as any).click === "function") {
+      (element as any).click();
     }
   } catch (e) {}
+
+  return true;
 };
 
-// 4. Modal finder: strictly detects the active connection dialog (ignoring background backdrop)
-const getInvitationModal = (): HTMLElement | null => {
+// 5. Multi-Strategy "Send without a note" Button Finder
+const findSendWithoutNoteButton = (): HTMLElement | null => {
+  // Candidate elements across the document
   const candidates = Array.from(
     document.querySelectorAll<HTMLElement>(
-      "#artdeco-modal-outlet .artdeco-modal, div[role='dialog'].artdeco-modal, div[role='dialog'], .artdeco-modal"
+      "button, [role='button'], a.artdeco-button, a[role='button'], a"
     )
   );
 
-  for (const modal of candidates) {
-    // Exclude the dark backdrop overlay div
-    if (modal.classList.contains("artdeco-modal-overlay")) continue;
-
-    const text = (modal.innerText || modal.textContent || "").toLowerCase();
-    const heading = modal.querySelector("h1, h2, h3, [id*='title'], [id*='header']");
-    const headingText = heading ? (heading.textContent || "").toLowerCase() : "";
-
-    if (
-      headingText.includes("note") ||
-      headingText.includes("invit") ||
-      text.includes("send without a note") ||
-      text.includes("add a note") ||
-      text.includes("invitation")
-    ) {
-      return modal;
-    }
-  }
-
-  return null;
-};
-
-// 5. Send button finder: strictly scoped INSIDE the modal dialog
-const findSendButtonInModal = (modal: HTMLElement): HTMLElement | null => {
-  const buttons = Array.from(
-    modal.querySelectorAll<HTMLElement>("button, [role='button'], .artdeco-button")
-  );
-
-  // Strategy 1: Text or aria-label containing "without a note"
-  for (const btn of buttons) {
+  // Strategy 1: Global search for aria-label or innerText containing "without a note"
+  for (const btn of candidates) {
+    if (!isElementVisible(btn)) continue;
     const text = (btn.innerText || btn.textContent || "").toLowerCase().trim();
     const aria = (btn.getAttribute("aria-label") || "").toLowerCase().trim();
 
     if (text.includes("without a note") || aria.includes("without a note")) {
+      console.log("[AgentX] 🎯 Strategy 1 matched 'without a note':", text || aria);
       return btn;
     }
   }
 
-  // Strategy 2: The primary action button inside modal actionbar
-  const actionbar = modal.querySelector(".artdeco-modal__actionbar") || modal;
-  const primaryBtn = actionbar.querySelector<HTMLElement>(
-    "button.artdeco-button--primary, .artdeco-button--primary, button[data-test-modal-button='primary']"
-  );
-  if (primaryBtn) {
-    return primaryBtn;
-  }
-
-  // Strategy 3: Fallback inside modal with "send" (excluding dismiss, cancel, add a note)
-  for (const btn of buttons) {
+  // Strategy 2: Global search for aria-label or innerText matching "send now"
+  for (const btn of candidates) {
+    if (!isElementVisible(btn)) continue;
     const text = (btn.innerText || btn.textContent || "").toLowerCase().trim();
     const aria = (btn.getAttribute("aria-label") || "").toLowerCase().trim();
 
-    const isDismiss =
-      text.includes("dismiss") ||
-      aria.includes("dismiss") ||
-      text.includes("cancel") ||
-      aria.includes("cancel") ||
-      text.includes("add a note") ||
-      aria.includes("add a note") ||
-      aria.includes("close");
-
-    if (!isDismiss && (text.includes("send") || aria.includes("send"))) {
+    if (
+      text === "send now" ||
+      aria === "send now" ||
+      text.includes("send now") ||
+      aria.includes("send now")
+    ) {
+      console.log("[AgentX] 🎯 Strategy 2 matched 'send now':", text || aria);
       return btn;
+    }
+  }
+
+  // Strategy 3: Search within any active dialog / modal / overlay
+  const modals = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "div[role='dialog'], dialog, [aria-modal='true'], .artdeco-modal, #artdeco-modal-outlet, [class*='modal'], [class*='dialog']"
+    )
+  ).filter((m) => {
+    if (m.classList.contains("artdeco-modal-overlay")) return false;
+    if (!isElementVisible(m)) return false;
+    const txt = (m.innerText || m.textContent || "").toLowerCase();
+    return (
+      txt.includes("note") ||
+      txt.includes("invit") ||
+      txt.includes("send") ||
+      txt.includes("connect")
+    );
+  });
+
+  for (const modal of modals) {
+    const modalButtons = Array.from(
+      modal.querySelectorAll<HTMLElement>("button, [role='button'], a")
+    ).filter(isElementVisible);
+
+    // 3a. Sibling strategy: If modal has "Add a note" button, find the other action button in the footer
+    const addNoteBtn = modalButtons.find((b) => {
+      const t = (b.innerText || b.textContent || "").toLowerCase().trim();
+      const a = (b.getAttribute("aria-label") || "").toLowerCase().trim();
+      return t.includes("add a note") || a.includes("add a note");
+    });
+
+    if (addNoteBtn) {
+      const sendCandidate = modalButtons.find((b) => {
+        if (b === addNoteBtn) return false;
+        const t = (b.innerText || b.textContent || "").toLowerCase().trim();
+        const a = (b.getAttribute("aria-label") || "").toLowerCase().trim();
+        const isDismiss =
+          t.includes("dismiss") ||
+          a.includes("dismiss") ||
+          t.includes("cancel") ||
+          a.includes("cancel") ||
+          a.includes("close") ||
+          t.includes("close");
+        return !isDismiss;
+      });
+
+      if (sendCandidate) {
+        console.log(
+          "[AgentX] 🎯 Strategy 3a (Add a note sibling) matched:",
+          sendCandidate.innerText || sendCandidate.getAttribute("aria-label")
+        );
+        return sendCandidate;
+      }
+    }
+
+    // 3b. Primary button inside modal
+    const primaryBtn = modal.querySelector<HTMLElement>(
+      "button.artdeco-button--primary, button[data-test-modal-button='primary'], button[class*='primary'], .artdeco-button--primary"
+    );
+    if (primaryBtn && isElementVisible(primaryBtn)) {
+      console.log("[AgentX] 🎯 Strategy 3b (primary button in modal) matched");
+      return primaryBtn;
+    }
+
+    // 3c. Any button inside modal containing "send"
+    for (const b of modalButtons) {
+      const t = (b.innerText || b.textContent || "").toLowerCase().trim();
+      const a = (b.getAttribute("aria-label") || "").toLowerCase().trim();
+      const isDismiss =
+        t.includes("dismiss") ||
+        a.includes("dismiss") ||
+        t.includes("cancel") ||
+        a.includes("cancel") ||
+        t.includes("add a note") ||
+        a.includes("add a note") ||
+        a.includes("close") ||
+        t.includes("close");
+
+      if (!isDismiss && (t.includes("send") || a.includes("send"))) {
+        console.log("[AgentX] 🎯 Strategy 3c (modal send button) matched:", t || a);
+        return b;
+      }
+    }
+  }
+
+  // Strategy 4: Deep text traversal for spans/divs with exact text
+  const textElements = Array.from(
+    document.querySelectorAll<HTMLElement>("span, p, div")
+  );
+  for (const el of textElements) {
+    if (!isElementVisible(el)) continue;
+    const txt = (el.textContent || "").trim();
+    if (
+      txt === "Send without a note" ||
+      txt === "Send now" ||
+      txt === "Send"
+    ) {
+      const parentBtn = el.closest<HTMLElement>("button, [role='button'], a");
+      if (parentBtn && isElementVisible(parentBtn)) {
+        console.log("[AgentX] 🎯 Strategy 4 (text element parent) matched:", txt);
+        return parentBtn;
+      }
     }
   }
 
   return null;
 };
 
-// 6. Direct status verification (scoped to top card and toast notifications)
+// 6. Direct status verification
 const isInviteSent = (): boolean => {
-  const mainCard = document.querySelector("main .pv-top-card, main section.artdeco-card, main");
+  // Check main profile card buttons for "Pending" or "Withdraw"
+  const mainCard =
+    document.querySelector("main .pv-top-card, main section.artdeco-card, main [data-sdui-screen*='Profile'], main") ||
+    document.querySelector("main");
+
   if (mainCard) {
-    const mainButtons = Array.from(mainCard.querySelectorAll<HTMLElement>("button, [role='button']"));
-    for (const b of mainButtons) {
-      if (b.closest(".aside, aside, .ad-banner, .pv-browsemap")) continue;
+    const buttons = Array.from(
+      mainCard.querySelectorAll<HTMLElement>("button, [role='button'], a")
+    );
+    for (const b of buttons) {
+      if (
+        b.closest(
+          "[data-testid*='carousel'], [id*='PostConnect'], [componentkey*='similar'], aside, .aside"
+        )
+      ) {
+        continue;
+      }
       const txt = (b.innerText || b.textContent || "").toLowerCase().trim();
-      if (txt === "pending") return true;
+      const aria = (b.getAttribute("aria-label") || "").toLowerCase().trim();
+      if (
+        txt === "pending" ||
+        aria.includes("pending") ||
+        txt === "withdraw" ||
+        aria.includes("withdraw") ||
+        txt === "invited"
+      ) {
+        return true;
+      }
     }
   }
 
-  const toast = document.querySelector(".artdeco-toast-item, .artdeco-inline-feedback");
+  // Check toast notifications
+  const toast = document.querySelector<HTMLElement>(
+    ".artdeco-toast-item, .artdeco-inline-feedback, [data-testid='toasts-title'], [role='alert']"
+  );
   if (toast) {
     const txt = (toast.textContent || "").toLowerCase();
-    if (txt.includes("invitation sent") || txt.includes("invite sent")) {
+    if (
+      txt.includes("invitation sent") ||
+      txt.includes("invite sent") ||
+      txt.includes("invitation is on its way")
+    ) {
       return true;
     }
   }
@@ -219,133 +354,145 @@ const isInviteSent = (): boolean => {
   return false;
 };
 
-// 7. Modal Wait & Guaranteed Click strictly targeting the modal
-const handleModalSend = async (knownModal?: HTMLElement): Promise<boolean> => {
-  console.log("[AgentX] ⏳ Waiting for 'Send without a note' modal dialog...");
-
-  let targetModal: HTMLElement | null = knownModal || null;
-
-  if (!targetModal) {
-    for (let wait = 0; wait < 25; wait++) {
-      targetModal = getInvitationModal();
-      if (targetModal) break;
-      if (isInviteSent()) {
-        console.log("[AgentX] ✅ Invitation already sent directly without modal!");
-        return true;
-      }
-      await humanPause(250, 400);
-    }
-  }
-
-  if (!targetModal) {
-    console.warn("[AgentX] ⚠️ Modal dialog did not appear.");
-    return isInviteSent();
-  }
-
-  console.log("[AgentX] 🎯 Modal detected! Locating 'Send without a note' button inside modal...");
-  await humanPause(350, 550);
+// 7. Modal Wait & Guaranteed Click strictly targeting "Send without a note"
+const handleModalSend = async (): Promise<boolean> => {
+  console.log("[AgentX] ⏳ Waiting for 'Send without a note' button to appear...");
 
   let sendBtn: HTMLElement | null = null;
-  for (let bWait = 0; bWait < 15; bWait++) {
-    sendBtn = findSendButtonInModal(targetModal);
-    if (sendBtn) break;
-    await humanPause(200, 350);
+
+  // Poll for up to 30 attempts (~7.5 seconds)
+  for (let wait = 0; wait < 30; wait++) {
+    sendBtn = findSendWithoutNoteButton();
+    if (sendBtn) {
+      console.log("[AgentX] ✅ Target 'Send without a note' button detected!");
+      break;
+    }
+
+    // Direct check: maybe connection request was sent directly without requiring a note modal
+    if (isInviteSent()) {
+      console.log("[AgentX] ✅ Invitation already sent directly without modal!");
+      return true;
+    }
+
+    await humanPause(200, 300);
   }
 
   if (!sendBtn) {
-    console.warn("[AgentX] ⚠️ Send button not found inside modal.");
+    if (isInviteSent()) {
+      console.log("[AgentX] ✅ Verified invitation sent.");
+      return true;
+    }
+    console.warn("[AgentX] ⚠️ 'Send without a note' button did not appear.");
     return false;
   }
 
-  const label = (
-    sendBtn.innerText ||
-    sendBtn.textContent ||
-    sendBtn.getAttribute("aria-label") ||
-    "Send without a note"
-  ).trim();
+  // Allow 300ms for modal slide-in animation to stabilize
+  await humanPause(300, 500);
 
-  console.log(`[AgentX] 🎯 Found target button inside modal: '${label}'. Executing click sequence...`);
-  await humanPause(250, 450);
-
-  // Click until modal vanishes (up to 8 strikes)
-  for (let strike = 0; strike < 8; strike++) {
-    const currentModal = getInvitationModal();
-    if (!currentModal) {
-      console.log("[AgentX] ✅ Modal closed! Invitation sent successfully.");
-      return true;
-    }
-
-    const currentBtn = findSendButtonInModal(currentModal);
+  // Click sequence: click exact coordinates until the button/modal disappears (up to 6 strikes)
+  for (let strike = 0; strike < 6; strike++) {
+    const currentBtn = findSendWithoutNoteButton();
     if (!currentBtn) {
-      console.log("[AgentX] ✅ Send button no longer in modal! Invitation sent.");
+      console.log("[AgentX] ✅ Send button no longer in DOM! Invitation sent successfully.");
       return true;
     }
 
-    console.log(`[AgentX] 🚀 Strike #${strike + 1}: Clicking '${label}' inside modal...`);
-    simulateHumanClick(currentBtn);
+    const label = (
+      currentBtn.innerText ||
+      currentBtn.textContent ||
+      currentBtn.getAttribute("aria-label") ||
+      "Send without a note"
+    ).trim();
+
+    console.log(`[AgentX] 🚀 Strike #${strike + 1}: Clicking '${label}' at exact point...`);
+    clickExactPoint(currentBtn);
     await humanPause(600, 900);
+
+    if (isInviteSent()) {
+      console.log("[AgentX] ✅ Verified invitation is pending/sent!");
+      return true;
+    }
   }
 
-  const finished = !getInvitationModal() || isInviteSent();
-  console.log(`[AgentX] Modal closed status: ${finished}`);
+  const finished = !findSendWithoutNoteButton() || isInviteSent();
+  console.log(`[AgentX] Modal closed / finished status: ${finished}`);
   return finished;
 };
 
-// 8. Connect Button Finder (Profile Top Card only)
+// 8. Connect Button Finder (Profile Top Card only, excluding carousels and recommendations)
 const findConnectButton = (): HTMLElement | null => {
   const topCard =
-    document.querySelector("main .pv-top-card, main section.artdeco-card, main") ||
+    document.querySelector("main .pv-top-card, main section.artdeco-card, main [data-sdui-screen*='Profile'], main") ||
     document.querySelector("main") ||
     document.body;
 
   const elements = Array.from(
-    topCard.querySelectorAll<HTMLElement>("button, [role='button'], a"),
+    topCard.querySelectorAll<HTMLElement>("button, [role='button'], a")
   );
 
   for (const el of elements) {
-    if (el.closest(".aside, aside, .pv-browsemap, .ad-banner")) continue;
+    // Strictly ignore recommended people, drawers, and carousels
+    if (
+      el.closest(
+        "[data-testid*='carousel'], [id*='PostConnect'], [componentkey*='PostConnect'], [componentkey*='similar'], [id*='similar'], section[aria-label*='similar' i], section[aria-label*='People also viewed' i], aside, .aside"
+      )
+    ) {
+      continue;
+    }
 
     const text = (el.innerText || el.textContent || "").toLowerCase().trim();
     const aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
+    const href = (el.getAttribute("href") || "").toLowerCase().trim();
+    const compKey = (el.getAttribute("componentkey") || "").toLowerCase().trim();
 
     const isConnect =
+      compKey.includes("connectbutton") ||
+      href.includes("custom-invite") ||
+      (aria.includes("invite") && aria.includes("connect")) ||
       text === "connect" ||
-      (text.includes("connect") && text.length < 25 && !text.includes("connection")) ||
-      (aria.includes("invite") && aria.includes("connect"));
+      (text.includes("connect") && text.length < 25 && !text.includes("connection"));
 
-    if (isConnect) {
-      const style = window.getComputedStyle(el);
-      if (style.display !== "none" && style.visibility !== "hidden") {
-        return el;
-      }
+    if (isConnect && isElementVisible(el)) {
+      console.log("[AgentX] 🎯 Found profile Connect button:", text || aria || compKey);
+      return el;
     }
   }
 
   return null;
 };
 
-// 9. "More" Button Finder
+// 9. "More" Button Finder (Profile Top Card only)
 const findMoreButton = (): HTMLElement | null => {
   const topCard =
-    document.querySelector("main .pv-top-card, main section.artdeco-card, main") ||
+    document.querySelector("main .pv-top-card, main section.artdeco-card, main [data-sdui-screen*='Profile'], main") ||
     document.querySelector("main") ||
     document.body;
 
   const elements = Array.from(
-    topCard.querySelectorAll<HTMLElement>("button, [role='button']"),
+    topCard.querySelectorAll<HTMLElement>("button, [role='button']")
   );
 
   for (const el of elements) {
-    if (el.closest(".aside, aside, .pv-browsemap, .ad-banner")) continue;
+    if (
+      el.closest(
+        "[data-testid*='carousel'], [id*='PostConnect'], [componentkey*='PostConnect'], [componentkey*='similar'], [id*='similar'], section[aria-label*='similar' i], aside, .aside, [data-testid*='feed']"
+      )
+    ) {
+      continue;
+    }
 
     const text = (el.innerText || el.textContent || "").toLowerCase().trim();
     const aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
 
-    if (text === "more" || aria === "more actions" || aria.includes("more actions")) {
-      const style = window.getComputedStyle(el);
-      if (style.display !== "none" && style.visibility !== "hidden") {
-        return el;
-      }
+    const isMore =
+      text === "more" ||
+      aria === "more" ||
+      aria === "more actions" ||
+      aria.includes("more actions") ||
+      aria.includes("overflow");
+
+    if (isMore && isElementVisible(el)) {
+      return el;
     }
   }
 
@@ -355,24 +502,31 @@ const findMoreButton = (): HTMLElement | null => {
 // 10. Find Connect in Open Dropdown
 const findConnectInDropdown = (): HTMLElement | null => {
   const dropdown = document.querySelector<HTMLElement>(
-    ".artdeco-dropdown__content--is-open, .artdeco-dropdown__content, div.artdeco-dropdown",
+    "div[role='menu'], ul[role='menu'], .artdeco-dropdown__content--is-open, .artdeco-dropdown__content, div.artdeco-dropdown"
   );
   if (!dropdown) return null;
 
   const items = Array.from(
     dropdown.querySelectorAll<HTMLElement>(
-      "button, [role='button'], .artdeco-dropdown__item, span, a",
-    ),
+      "button, [role='button'], .artdeco-dropdown__item, [role='menuitem'], span, a"
+    )
   );
 
   for (const item of items) {
     const text = (item.innerText || item.textContent || "").toLowerCase().trim();
     const aria = (item.getAttribute("aria-label") || "").toLowerCase().trim();
+    const href = (item.getAttribute("href") || "").toLowerCase().trim();
+    const compKey = (item.getAttribute("componentkey") || "").toLowerCase().trim();
 
-    if (text.includes("connect") || aria.includes("connect")) {
+    if (
+      text.includes("connect") ||
+      aria.includes("connect") ||
+      href.includes("custom-invite") ||
+      compKey.includes("connect")
+    ) {
       const clickable =
         (item.closest(
-          "button, [role='button'], .artdeco-dropdown__item",
+          "button, [role='button'], [role='menuitem'], .artdeco-dropdown__item, a"
         ) as HTMLElement) || item;
       return clickable;
     }
@@ -388,17 +542,17 @@ chrome.runtime.onMessage.addListener(async (request: any) => {
     let succeeded = false;
 
     try {
-      await humanPause(600, 1200);
+      await humanPause(400, 800);
 
-      // Check if modal is ALREADY open on page
-      const existingModal = getInvitationModal();
-      if (existingModal) {
-        console.log("[AgentX] Modal already active on page! Sending immediately...");
-        succeeded = await handleModalSend(existingModal);
+      // Step 1: Check if "Send without a note" or modal is ALREADY open on the page
+      const existingSendBtn = findSendWithoutNoteButton();
+      if (existingSendBtn) {
+        console.log("[AgentX] 🎯 Modal/Send button already active on page! Sending immediately...");
+        succeeded = await handleModalSend();
       } else {
         await humanScroll();
 
-        // Step B: Find Connect button
+        // Step 2: Find Connect button on profile card
         let connectBtn = findConnectButton();
 
         if (!connectBtn) {
@@ -406,7 +560,7 @@ chrome.runtime.onMessage.addListener(async (request: any) => {
           const moreBtn = findMoreButton();
 
           if (moreBtn) {
-            simulateHumanClick(moreBtn);
+            clickExactPoint(moreBtn);
             for (let d = 0; d < 8; d++) {
               await humanPause(200, 350);
               connectBtn = findConnectInDropdown();
@@ -416,12 +570,17 @@ chrome.runtime.onMessage.addListener(async (request: any) => {
         }
 
         if (!connectBtn) {
-          console.log("[AgentX] ℹ️ Profile cannot be connected to (already connected, pending, or not allowed).");
+          if (isInviteSent()) {
+            console.log("[AgentX] ℹ️ Profile invitation is already pending or sent.");
+            succeeded = true;
+          } else {
+            console.log("[AgentX] ℹ️ Profile cannot be connected to (already connected, pending, or not allowed).");
+          }
         } else {
-          console.log("[AgentX] Clicking Connect button...");
-          simulateHumanClick(connectBtn);
+          console.log("[AgentX] 🎯 Found Connect button! Clicking exact point...");
+          clickExactPoint(connectBtn);
 
-          // Step C: Wait for modal and click "Send without a note"
+          // Step 3: Wait for modal and click "Send without a note"
           succeeded = await handleModalSend();
         }
       }
@@ -429,8 +588,8 @@ chrome.runtime.onMessage.addListener(async (request: any) => {
       console.error("[AgentX] Error during connection sequence:", err);
     }
 
-    // Step D: Report back to background script to close tab and continue
-    await humanPause(600, 1000);
+    // Step 4: Report back to background script to close tab and continue
+    await humanPause(500, 800);
     chrome.runtime.sendMessage({
       action: "CONNECT_COMPLETED",
       success: succeeded,
