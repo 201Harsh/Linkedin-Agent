@@ -128,7 +128,11 @@ CRITICAL RULES:
             type: "function_result",
             call_id: functionCallStep.id,
             name: functionCallStep.name,
-            result: JSON.stringify(searchResults),
+            result: JSON.stringify({
+              results: searchResults,
+              instruction:
+                "Extract all valid LinkedIn profile leads from these search results and output ONLY the ```json code block containing the 'leads' array with 'name', 'url' (direct LinkedIn profile URL), and a personalized 'note' (under 300 characters) for each lead. Do NOT output any conversational text, intro, or outro.",
+            }),
           },
         ],
       });

@@ -139,7 +139,7 @@ export default function ChatWidget({ user }: { user: any }) {
               data.leads.map((lead: any) =>
                 AxiosInstance.post("/users/campaigns/queue", {
                   name: lead.name,
-                  url: lead.url,
+                  url: lead.url || lead.linkedin_url,
                   note: lead.note,
                 }).catch((e) => console.error("Failed to auto-queue:", e)),
               ),
