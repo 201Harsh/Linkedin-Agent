@@ -178,9 +178,7 @@ CRITICAL RULES:
       model: MODEL_NAME,
       input: inputSteps,
       system_instruction: systemInstruction,
-      generation_config: {
-        thinking_level: "low",
-      },
+
       tools: [
         {
           type: "function",
