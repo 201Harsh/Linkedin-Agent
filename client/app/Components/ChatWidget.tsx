@@ -37,7 +37,7 @@ const LeadCard = ({
       </div>
       <div className="bg-[#111] p-3 rounded-lg border border-white/5">
         <p className="text-gray-400 text-xs italic">
-          '{lead.note || lead.message || "I'd like to connect with you on LinkedIn!"}'
+          '{lead.note || "I'd like to connect with you on LinkedIn!"}'
         </p>
       </div>
     </div>
