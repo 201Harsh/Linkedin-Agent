@@ -15,9 +15,9 @@ const campaignSchema = new Schema<ICampaign>({
     ref: "User",
     required: true,
   },
-  name: { type: String, required: true },
+  name: { type: String, required: true, default: "LinkedIn Member" },
   url: { type: String, required: true },
-  note: { type: String, required: true },
+  note: { type: String, default: "" },
   status: {
     type: String,
     enum: ["pending", "sent"],

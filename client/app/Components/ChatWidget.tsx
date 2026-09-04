@@ -36,7 +36,9 @@ const LeadCard = ({
         </span>
       </div>
       <div className="bg-[#111] p-3 rounded-lg border border-white/5">
-        <p className="text-gray-400 text-xs italic">'{lead.note}'</p>
+        <p className="text-gray-400 text-xs italic">
+          '{lead.note || lead.message || "I'd like to connect with you on LinkedIn!"}'
+        </p>
       </div>
     </div>
   );
@@ -138,9 +140,13 @@ export default function ChatWidget({ user }: { user: any }) {
             await Promise.all(
               data.leads.map((lead: any) =>
                 AxiosInstance.post("/users/campaigns/queue", {
-                  name: lead.name,
+                  name: lead.name || "LinkedIn Member",
                   url: lead.url || lead.linkedin_url,
-                  note: lead.note,
+                  note:
+                    lead.note ||
+                    lead.message ||
+                    lead.connection_note ||
+                    "Hi, I'd like to connect with you on LinkedIn!",
                 }).catch((e) => console.error("Failed to auto-queue:", e)),
               ),
             );

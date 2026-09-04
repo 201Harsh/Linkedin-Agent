@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((request: any, _sender: any, sendResponse: 
   }
 });
 
-const randomHumanDelay = (minSeconds = 25, maxSeconds = 50) => {
+const randomHumanDelay = (minSeconds = 6, maxSeconds = 12) => {
   const ms = Math.floor(Math.random() * ((maxSeconds - minSeconds) * 1000 + 1)) + minSeconds * 1000;
   return ms;
 };
@@ -32,8 +32,7 @@ const pollQueue = async () => {
     const token = storage.agentx_token;
 
     if (!token) {
-      console.log("[AgentX] No auth token found. Open http://localhost:3000/dashboard to sync.");
-      setTimeout(pollQueue, 10000);
+      setTimeout(pollQueue, 4000);
       return;
     }
 
@@ -46,21 +45,20 @@ const pollQueue = async () => {
     });
 
     if (response.status === 401) {
-      console.error("[AgentX] Token expired or invalid (401). Purging token from storage...");
+      console.error("[AgentX] Token expired (401). Purging token from storage...");
       await chrome.storage.local.remove("agentx_token");
-      setTimeout(pollQueue, 10000);
+      setTimeout(pollQueue, 6000);
       return;
     }
 
     if (response.status === 404) {
-      // Queue is empty right now
-      setTimeout(pollQueue, 8000);
+      // Queue is empty right now, check soon
+      setTimeout(pollQueue, 4000);
       return;
     }
 
     if (!response.ok) {
-      console.warn("[AgentX] Polling queue returned status:", response.status);
-      setTimeout(pollQueue, 10000);
+      setTimeout(pollQueue, 6000);
       return;
     }
 
@@ -73,7 +71,7 @@ const pollQueue = async () => {
       chrome.tabs.create({ url: lead.url, active: false }, (tab) => {
         if (!tab || !tab.id) {
           isProcessing = false;
-          setTimeout(pollQueue, 10000);
+          setTimeout(pollQueue, 4000);
           return;
         }
 
@@ -89,25 +87,23 @@ const pollQueue = async () => {
           chrome.tabs.get(tabId, (existingTab) => {
             if (existingTab && !chrome.runtime.lastError) {
               chrome.tabs.remove(tabId, () => {
-                if (chrome.runtime.lastError) {
-                  // Tab was already closed by user
-                }
+                if (chrome.runtime.lastError) {}
               });
             }
           });
 
-          const pause = nextDelayMs ?? randomHumanDelay(25, 45);
-          console.log(`[AgentX] ☕ Human pacing: waiting ${Math.round(pause / 1000)}s before next action...`);
+          const pause = nextDelayMs ?? randomHumanDelay(6, 12);
+          console.log(`[AgentX] ☕ Pacing: waiting ${Math.round(pause / 1000)}s before next lead...`);
           setTimeout(pollQueue, pause);
         };
 
-        // Failsafe timeout after 60s
+        // Failsafe timeout after 30s
         const failsafe = setTimeout(() => {
           if (!completed) {
             console.warn("[AgentX] ⏱️ Timeout on tab execution. Closing tab and continuing...");
-            cleanupAndProceed(10000);
+            cleanupAndProceed(4000);
           }
-        }, 60000);
+        }, 30000);
 
         // Listen for completion response from content script
         const messageListener = (msg: any, sender: any) => {
@@ -125,7 +121,7 @@ const pollQueue = async () => {
           if (tId === tabId && info.status === "complete") {
             chrome.tabs.onUpdated.removeListener(updateListener);
 
-            // Natural human pause before interacting (3-5 seconds for full React hydration)
+            // Responsive 1.8s pause for LinkedIn dynamic hydration
             setTimeout(() => {
               chrome.tabs.sendMessage(
                 tabId,
@@ -134,13 +130,13 @@ const pollQueue = async () => {
                   note: lead.note,
                   name: lead.name,
                 },
-                (response) => {
+                () => {
                   if (chrome.runtime.lastError) {
-                    console.warn("[AgentX] Message send error:", chrome.runtime.lastError.message);
+                    console.warn("[AgentX] Message send notice:", chrome.runtime.lastError.message);
                   }
                 },
               );
-            }, 4000);
+            }, 1800);
           }
         });
       });
@@ -148,11 +144,11 @@ const pollQueue = async () => {
       return;
     }
   } catch (error: any) {
-    console.warn(`[AgentX] Network error connecting to ${BACKEND_URL}:`, error?.message || error);
+    console.warn(`[AgentX] Network error:`, error?.message || error);
     isProcessing = false;
   }
 
-  setTimeout(pollQueue, 10000);
+  setTimeout(pollQueue, 4000);
 };
 
 // Start the queue polling engine

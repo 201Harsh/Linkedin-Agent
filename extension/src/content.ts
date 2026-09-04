@@ -25,23 +25,57 @@ if (window.location.hostname === frontendHostname) {
   };
 
   syncToken();
-  setInterval(syncToken, 3000);
+  setInterval(syncToken, 2500);
 }
 
-// 2. Realistic human helper functions
-const humanPause = (min = 1500, max = 3500) => {
+// 2. Fast human pauses (responsive, not sluggish)
+const humanPause = (min = 600, max = 1400) => {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 const humanScroll = async () => {
   try {
-    const scrollDown = Math.floor(Math.random() * 300) + 150;
+    const scrollDown = Math.floor(Math.random() * 250) + 150;
     window.scrollBy({ top: scrollDown, behavior: "smooth" });
-    await humanPause(1500, 2500);
-    window.scrollBy({ top: -Math.floor(scrollDown * 0.6), behavior: "smooth" });
-    await humanPause(1000, 1800);
+    await humanPause(400, 700);
+    window.scrollBy({ top: -scrollDown, behavior: "smooth" });
+    await humanPause(300, 600);
   } catch (e) {}
+};
+
+// 3. Robust real-click simulator (fires complete React/DOM event cycle)
+const simulateRealClick = (el: HTMLElement) => {
+  const innerSpan = (el.querySelector("span") as HTMLElement) || el;
+  const rect = el.getBoundingClientRect();
+  const clientX = rect.left + rect.width / 2;
+  const clientY = rect.top + rect.height / 2;
+
+  const eventOpts: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    clientX,
+    clientY,
+  };
+
+  try {
+    el.dispatchEvent(new PointerEvent("pointerdown", eventOpts));
+    el.dispatchEvent(new MouseEvent("mousedown", eventOpts));
+    innerSpan.dispatchEvent(new MouseEvent("mousedown", eventOpts));
+
+    el.dispatchEvent(new PointerEvent("pointerup", eventOpts));
+    el.dispatchEvent(new MouseEvent("mouseup", eventOpts));
+    innerSpan.dispatchEvent(new MouseEvent("mouseup", eventOpts));
+
+    el.dispatchEvent(new MouseEvent("click", eventOpts));
+    innerSpan.dispatchEvent(new MouseEvent("click", eventOpts));
+  } catch (e) {}
+
+  el.click();
+  if (innerSpan !== el) {
+    innerSpan.click();
+  }
 };
 
 const humanType = async (element: HTMLTextAreaElement, text: string) => {
@@ -49,51 +83,44 @@ const humanType = async (element: HTMLTextAreaElement, text: string) => {
   element.value = "";
 
   for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    element.value += char;
+    element.value += text[i];
     element.dispatchEvent(new Event("input", { bubbles: true }));
     element.dispatchEvent(new Event("change", { bubbles: true }));
-
-    // Human typing cadence: slightly faster on regular chars, slight pause on spaces
-    const delay = char === " " || char === "." ? Math.floor(Math.random() * 120) + 80 : Math.floor(Math.random() * 50) + 30;
-    await new Promise((r) => setTimeout(r, delay));
+    await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 25) + 15));
   }
 
-  await humanPause(800, 1500);
+  await humanPause(300, 600);
 };
 
-// 3. Robust button finder
-const findClickableElement = (
+// 4. Find button by text or aria-label
+const findButton = (
   targetTexts: string[],
   scopeSelector = "main",
 ): HTMLElement | null => {
   const scope = document.querySelector(scopeSelector) || document.body;
   const elements = Array.from(
     scope.querySelectorAll<HTMLElement>(
-      "button, [role='button'], .artdeco-dropdown__item, span, a",
+      "button, [role='button'], .artdeco-dropdown__item, a",
     ),
   );
 
   for (const targetText of targetTexts) {
-    const cleanTarget = targetText.toLowerCase().trim();
+    const clean = targetText.toLowerCase().trim();
 
     for (const el of elements) {
       const text = (el.innerText || el.textContent || "").toLowerCase().trim();
       const aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
 
-      const matchText = text === cleanTarget || (text.includes(cleanTarget) && text.length < cleanTarget.length + 20);
-      const matchAria = aria === cleanTarget || (aria.includes(cleanTarget) && aria.length < cleanTarget.length + 30);
+      const textMatch = text === clean || (text.includes(clean) && text.length < clean.length + 25);
+      const ariaMatch = aria === clean || (aria.includes(clean) && aria.length < clean.length + 30);
 
-      if (matchText || matchAria) {
-        // Exclude irrelevant buttons like "Connect with..." or "Message" or "Follow"
-        if (cleanTarget === "more" && text.includes("show")) continue;
+      if (textMatch || ariaMatch) {
+        if (clean === "more" && text.includes("show")) continue;
 
         const rect = el.getBoundingClientRect();
         const style = window.getComputedStyle(el);
         if (style.display !== "none" && style.visibility !== "hidden" && rect.width > 0) {
-          const clickable =
-            (el.closest("button, [role='button'], .artdeco-dropdown__item, a") as HTMLElement) || el;
-          return clickable;
+          return el;
         }
       }
     }
@@ -102,108 +129,121 @@ const findClickableElement = (
   return null;
 };
 
-// 4. Modal handler with Note support
+// 5. Send button hammerer (destroys modal reliably)
+const hammerSendButton = async (modal: HTMLElement, note?: string): Promise<boolean> => {
+  // If a note was provided, try adding it quickly
+  if (note && note.trim().length > 0) {
+    const addNoteBtn = Array.from(modal.querySelectorAll<HTMLElement>("button")).find((b) => {
+      const t = (b.innerText || b.textContent || b.getAttribute("aria-label") || "").toLowerCase();
+      return t.includes("add a note");
+    });
+
+    if (addNoteBtn) {
+      console.log("[AgentX] ✍️ Clicking 'Add a note'...");
+      simulateRealClick(addNoteBtn);
+      await humanPause(600, 1000);
+
+      const textarea = modal.querySelector<HTMLTextAreaElement>("textarea");
+      if (textarea) {
+        console.log(`[AgentX] ⌨️ Typing note (${note.length} chars)...`);
+        const safeNote = note.length > 295 ? note.slice(0, 292) + "..." : note;
+        await humanType(textarea, safeNote);
+      }
+    }
+  }
+
+  // Find the confirmation button ("Send", "Send without a note", "Send now")
+  for (let strike = 0; strike < 8; strike++) {
+    if (!document.querySelector(".artdeco-modal")) {
+      console.log("[AgentX] ✅ Modal vanished! Request sent.");
+      return true;
+    }
+
+    const buttons = Array.from(modal.querySelectorAll<HTMLElement>("button"));
+    let sendBtn: HTMLElement | null | undefined = buttons.find((b) => {
+      const t = (b.innerText || b.textContent || b.getAttribute("aria-label") || "").toLowerCase().trim();
+      return (
+        t === "send without a note" ||
+        t.includes("send without a note") ||
+        t === "send" ||
+        t === "send now" ||
+        t.includes("send invitation")
+      );
+    });
+
+    // If still looking and "Send without a note" is on screen
+    if (!sendBtn) {
+      sendBtn = modal.querySelector<HTMLElement>("button[aria-label*='Send'], button[aria-label*='note']");
+    }
+
+    if (sendBtn) {
+      console.log(`[AgentX] 🚀 Sending strike #${strike + 1} on button:`, sendBtn.innerText || sendBtn.getAttribute("aria-label"));
+      simulateRealClick(sendBtn);
+    }
+
+    await humanPause(500, 800);
+  }
+
+  return !document.querySelector(".artdeco-modal");
+};
+
+// 6. Modal detection & execution
 const handleConnectModal = async (note?: string): Promise<boolean> => {
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     const modal = document.querySelector<HTMLElement>(".artdeco-modal");
 
     if (modal) {
-      console.log("[AgentX] Connect modal detected.");
-      await humanPause(1200, 2000);
-
-      // Try to add a personalized note if available
-      if (note && note.trim().length > 0) {
-        const addNoteBtn = Array.from(modal.querySelectorAll<HTMLElement>("button")).find((b) => {
-          const t = (b.innerText || b.textContent || b.getAttribute("aria-label") || "").toLowerCase();
-          return t.includes("add a note");
-        });
-
-        if (addNoteBtn) {
-          console.log("[AgentX] ✍️ Clicking 'Add a note'...");
-          addNoteBtn.click();
-          await humanPause(1000, 1800);
-
-          const textarea = modal.querySelector<HTMLTextAreaElement>("textarea");
-          if (textarea) {
-            console.log(`[AgentX] ⌨️ Typing personalized note (${note.length} chars) with human cadence...`);
-            // Truncate to 295 chars if necessary to respect LinkedIn 300 char note limit
-            const safeNote = note.length > 295 ? note.slice(0, 292) + "..." : note;
-            await humanType(textarea, safeNote);
-          }
-        }
-      }
-
-      // Look for send button
-      const sendButtons = Array.from(modal.querySelectorAll<HTMLElement>("button"));
-      let sendBtn = sendButtons.find((b) => {
-        const t = (b.innerText || b.textContent || b.getAttribute("aria-label") || "").toLowerCase();
-        return t === "send" || t.includes("send now") || t.includes("send without a note") || t.includes("send invitation");
-      });
-
-      if (sendBtn) {
-        console.log("[AgentX] 🚀 Clicking Send button:", sendBtn.innerText || sendBtn.getAttribute("aria-label"));
-        sendBtn.click();
-
-        // Wait for modal to dismiss
-        for (let check = 0; check < 5; check++) {
-          await humanPause(800, 1200);
-          if (!document.querySelector(".artdeco-modal")) {
-            console.log("[AgentX] ✅ Modal closed. Invitation dispatched successfully.");
-            return true;
-          }
-          sendBtn.click();
-        }
-        return true;
-      }
+      console.log("[AgentX] ✅ Connect modal detected.");
+      await humanPause(500, 800);
+      return await hammerSendButton(modal, note);
     }
 
-    await humanPause(1000, 1500);
+    await humanPause(500, 800);
   }
 
   return false;
 };
 
-// 5. Message listener from Background Script
+// 7. Message listener from Background Script
 chrome.runtime.onMessage.addListener(async (request: any) => {
   if (request.action === "EXECUTE_CONNECT") {
-    console.log("[AgentX] 🤖 Initiating human connection sequence for:", request.name || "Target");
+    console.log("[AgentX] ⚡ Fast connection sequence for:", request.name || "Target");
     let succeeded = false;
 
     try {
-      // Step A: Human warm-up pause and page exploration
-      await humanPause(2500, 4000);
+      // Step A: Brief human pause and gentle scroll
+      await humanPause(1200, 2000);
       await humanScroll();
 
-      // Step B: Search for Connect button
-      let connectBtn = findClickableElement(["connect", "invite to connect"], "main");
+      // Step B: Find Connect button
+      let connectBtn = findButton(["connect", "invite to connect"], "main");
 
       if (!connectBtn) {
-        console.log("[AgentX] Connect not visible in primary actions. Checking 'More' dropdown...");
-        const moreBtn = findClickableElement(["more", "more actions"], "main");
+        console.log("[AgentX] Connect not in primary buttons. Checking 'More' menu...");
+        const moreBtn = findButton(["more", "more actions"], "main");
 
         if (moreBtn) {
-          moreBtn.click();
-          await humanPause(1200, 2000);
-          connectBtn = findClickableElement(["connect"], ".artdeco-dropdown__content--is-open, .artdeco-dropdown");
+          simulateRealClick(moreBtn);
+          await humanPause(600, 1000);
+          connectBtn = findButton(["connect"], ".artdeco-dropdown__content--is-open, .artdeco-dropdown");
         }
       }
 
       if (!connectBtn) {
-        console.log("[AgentX] ℹ️ Profile cannot be connected to (already connected, pending, or restricted).");
+        console.log("[AgentX] ℹ️ Profile already connected, pending, or not connectable.");
       } else {
-        console.log("[AgentX] Found Connect button. Clicking with human pause...");
-        await humanPause(800, 1600);
-        connectBtn.click();
+        console.log("[AgentX] Clicking Connect button...");
+        simulateRealClick(connectBtn);
+        await humanPause(600, 1000);
 
-        // Step C: Handle the connection modal (with personalized note or direct send)
         succeeded = await handleConnectModal(request.note);
       }
     } catch (err) {
-      console.error("[AgentX] Error during connect execution:", err);
+      console.error("[AgentX] Error during connection:", err);
     }
 
-    // Step D: Report back to background script to close tab and manage human pacing
-    await humanPause(1500, 2500);
+    // Step C: Complete and notify background script
+    await humanPause(800, 1400);
     chrome.runtime.sendMessage({
       action: "CONNECT_COMPLETED",
       success: succeeded,
