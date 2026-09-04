@@ -42,7 +42,8 @@ export async function AgentX({
   user: any;
   chatHistory: any[];
 }) {
-  const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  // gemini-2.5-flash-lite delivers ~1.2s response times vs 60s+ on preview models
+  const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
   const systemInstruction = `You are AgentX, an elite LinkedIn networking AI.
 Your user is: ${user.name}.
@@ -59,7 +60,7 @@ CRITICAL RULES:
    \`\`\`json
    {
      "leads": [
-       { "name": "Target Name", "url": "https://linkedin.com/in/...", "note": "Personalized connection note..." }
+       { "name": "Target Name", "url": "https://linkedin.com/in/...", "note": "Personalized connection note under 300 chars..." }
      ]
    }
    \`\`\`
@@ -68,124 +69,35 @@ CRITICAL RULES:
    - DO NOT use the search tool.
    - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.`;
 
-  // Try Interactions API first (as documented by user)
+  // Primary: Ultra-low latency generateContent pipeline (~3.5s total)
   try {
-    const inputSteps: any[] = [];
-
-    if (chatHistory && chatHistory.length > 0) {
-      chatHistory.forEach((msg) => {
-        if (msg.role === "user") {
-          inputSteps.push({
-            type: "user_input",
-            content: [{ type: "text", text: msg.content }],
-          });
-        } else {
-          inputSteps.push({
-            type: "model_output",
-            content: [{ type: "text", text: msg.content }],
-          });
-        }
-      });
-    } else {
-      inputSteps.push({
-        type: "user_input",
-        content: [{ type: "text", text: "Hello AgentX" }],
-      });
-    }
-
-    const interaction = await ai.interactions.create({
-      model: MODEL_NAME,
-      input: inputSteps,
-      system_instruction: systemInstruction,
-      generation_config: {
-        thinking_level: "low",
-      },
-      tools: [
-        {
-          type: "function",
-          name: "search_linkedin",
-          description:
-            "Searches LinkedIn profiles. Pass concise search keywords (e.g. 'Technical Recruiter Web Developer India').",
-          parameters: {
-            type: "object",
-            properties: {
-              search_query: {
-                type: "string",
-                description:
-                  "Concise keywords including role, skills, and location.",
-              },
-            },
-            required: ["search_query"],
-          },
-        },
-      ],
-    });
-
-    // Check if a tool call was made
-    const functionCallStep = interaction.steps?.find(
-      (step: any) => step.type === "function_call",
-    ) as any;
-
-    if (functionCallStep) {
-      const searchQuery = functionCallStep.arguments?.search_query || "";
-      const searchResults = await searchLinkedInTavily(searchQuery);
-
-      const finalInteraction = await ai.interactions.create({
-        model: MODEL_NAME,
-        previous_interaction_id: interaction.id,
-        input: [
-          {
-            type: "function_result",
-            call_id: functionCallStep.id,
-            name: functionCallStep.name,
-            result: JSON.stringify({
-              results: searchResults,
-              instruction:
-                "Extract all valid LinkedIn profile leads from these search results and output ONLY the ```json code block containing the 'leads' array with 'name', 'url' (direct LinkedIn profile URL), and a personalized 'note' (under 300 characters) for each lead. Do NOT output any conversational text, intro, or outro.",
-            }),
-          },
-        ],
-      });
-
-      return finalInteraction.output_text || "";
-    }
-
-    return interaction.output_text || "";
-  } catch (interactionError: any) {
-    console.warn(
-      "Interactions API fallback to generateContent:",
-      interactionError?.message || interactionError,
-    );
-
-    // Fallback to standard generateContent API
     const contents: any[] =
       chatHistory && chatHistory.length > 0
         ? chatHistory.map((msg) => ({
             role: msg.role === "assistant" ? "model" : "user",
             parts: [{ text: msg.content }],
           }))
-        : [{ role: "user", parts: [{ text: "Hello" }] }];
+        : [{ role: "user", parts: [{ text: "Find relevant LinkedIn leads" }] }];
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents,
       config: {
         systemInstruction,
-        temperature: 0.2,
+        temperature: 0.1,
         tools: [
           {
             functionDeclarations: [
               {
                 name: "search_linkedin",
                 description:
-                  "Searches the web for LinkedIn profiles. Use this for ANY internet search request.",
+                  "Searches LinkedIn profiles. Pass concise search keywords (e.g. 'Technical Recruiter Web Developer Bangalore').",
                 parameters: {
                   type: "object" as any,
                   properties: {
                     search_query: {
                       type: "string" as any,
-                      description:
-                        "The Google Dork query. Format: site:linkedin.com/in/ target location",
+                      description: "Keywords like role, skills, location.",
                     },
                   },
                   required: ["search_query"],
@@ -219,7 +131,11 @@ CRITICAL RULES:
                 {
                   functionResponse: {
                     name: "search_linkedin",
-                    response: { results: searchResults },
+                    response: {
+                      results: searchResults,
+                      instruction:
+                        "Extract all found leads and output ONLY a valid markdown ```json code block containing the 'leads' array with 'name', 'url' (direct LinkedIn URL), and a personalized 'note' (under 300 chars) for each. No other text.",
+                    },
                   },
                 },
               ],
@@ -227,7 +143,7 @@ CRITICAL RULES:
           ] as any,
           config: {
             systemInstruction,
-            temperature: 0.2,
+            temperature: 0.1,
           },
         });
 
@@ -236,6 +152,80 @@ CRITICAL RULES:
     }
 
     return response.text || "";
+  } catch (genError: any) {
+    console.warn(
+      "generateContent fallback to interactions:",
+      genError?.message || genError,
+    );
+
+    // Fallback: Interactions API
+    const inputSteps: any[] = [];
+    if (chatHistory && chatHistory.length > 0) {
+      chatHistory.forEach((msg) => {
+        inputSteps.push({
+          type: msg.role === "user" ? "user_input" : "model_output",
+          content: [{ type: "text", text: msg.content }],
+        });
+      });
+    } else {
+      inputSteps.push({
+        type: "user_input",
+        content: [{ type: "text", text: "Hello AgentX" }],
+      });
+    }
+
+    const interaction = await ai.interactions.create({
+      model: MODEL_NAME,
+      input: inputSteps,
+      system_instruction: systemInstruction,
+      generation_config: {
+        thinking_level: "low",
+      },
+      tools: [
+        {
+          type: "function",
+          name: "search_linkedin",
+          description: "Searches LinkedIn profiles.",
+          parameters: {
+            type: "object",
+            properties: {
+              search_query: { type: "string" },
+            },
+            required: ["search_query"],
+          },
+        },
+      ],
+    });
+
+    const functionCallStep = interaction.steps?.find(
+      (step: any) => step.type === "function_call",
+    ) as any;
+
+    if (functionCallStep) {
+      const searchQuery = functionCallStep.arguments?.search_query || "";
+      const searchResults = await searchLinkedInTavily(searchQuery);
+
+      const finalInteraction = await ai.interactions.create({
+        model: MODEL_NAME,
+        previous_interaction_id: interaction.id,
+        input: [
+          {
+            type: "function_result",
+            call_id: functionCallStep.id,
+            name: functionCallStep.name,
+            result: JSON.stringify({
+              results: searchResults,
+              instruction:
+                "Output ONLY a markdown ```json block with 'leads' array containing 'name', 'url', and 'note'.",
+            }),
+          },
+        ],
+      });
+
+      return finalInteraction.output_text || "";
+    }
+
+    return interaction.output_text || "";
   }
 }
 
