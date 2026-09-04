@@ -41,7 +41,7 @@ passport.use(
     } as any,
     async (
       accessToken: string,
-      refreshToken: string,
+      _refreshToken: string,
       profile: any,
       done: (error: any, user?: any) => void,
     ) => {

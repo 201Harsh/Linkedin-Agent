@@ -1,7 +1,9 @@
-import Groq from "groq-sdk";
+import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
 
-const groq = new Groq();
+const ai = new GoogleGenAI(
+  process.env.GEMINI_API_KEY ? { apiKey: process.env.GEMINI_API_KEY } : {},
+);
 
 async function searchLinkedInTavily(query: string) {
   console.log(`[Tavily] Executing search: ${query}`);
@@ -30,12 +32,9 @@ export async function AgentX({
   user: any;
   chatHistory: any[];
 }) {
-  const MODEL_NAME = "llama-3.1-8b-instant";
+  const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 
-  const messages: any[] = [
-    {
-      role: "system",
-      content: `You are AgentX, an elite LinkedIn networking AI.
+  const systemInstruction = `You are AgentX, an elite LinkedIn networking AI.
 Your user is: ${user.name}.
 Headline: ${user.headline || "Not specified"}.
 Location: ${user.location || "Not specified"}.
@@ -57,28 +56,43 @@ CRITICAL RULES:
 
 2. THE ADVICE PROTOCOL: IF the user asks for profile advice:
    - DO NOT use the search tool.
-   - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.`,
-    },
-  ];
+   - Act as an expert LinkedIn consultant. Give 3 actionable bullet points. Output as normal Markdown text, NOT JSON.`;
 
-  // Map the database chat history into the Groq message array
-  if (chatHistory && chatHistory.length > 0) {
-    chatHistory.forEach((msg) => {
-      messages.push({
-        role: msg.role,
-        content: msg.content,
+  // Try Interactions API first (as documented by user)
+  try {
+    const inputSteps: any[] = [];
+
+    if (chatHistory && chatHistory.length > 0) {
+      chatHistory.forEach((msg) => {
+        if (msg.role === "user") {
+          inputSteps.push({
+            type: "user_input",
+            content: [{ type: "text", text: msg.content }],
+          });
+        } else {
+          inputSteps.push({
+            type: "model_output",
+            content: [{ type: "text", text: msg.content }],
+          });
+        }
       });
-    });
-  }
+    } else {
+      inputSteps.push({
+        type: "user_input",
+        content: [{ type: "text", text: "Hello AgentX" }],
+      });
+    }
 
-  const completion = await groq.chat.completions.create({
-    model: MODEL_NAME,
-    messages: messages,
-    temperature: 0.2,
-    tools: [
-      {
-        type: "function",
-        function: {
+    const interaction = await ai.interactions.create({
+      model: MODEL_NAME,
+      input: inputSteps,
+      system_instruction: systemInstruction,
+      generation_config: {
+        thinking_level: "low",
+      },
+      tools: [
+        {
+          type: "function",
           name: "search_linkedin",
           description:
             "Searches the web for LinkedIn profiles. Use this for ANY internet search request.",
@@ -94,40 +108,121 @@ CRITICAL RULES:
             required: ["search_query"],
           },
         },
+      ],
+    });
+
+    // Check if a tool call was made
+    const functionCallStep = interaction.steps?.find(
+      (step: any) => step.type === "function_call",
+    ) as any;
+
+    if (functionCallStep) {
+      const searchQuery = functionCallStep.arguments?.search_query || "";
+      const searchResults = await searchLinkedInTavily(searchQuery);
+
+      const finalInteraction = await ai.interactions.create({
+        model: MODEL_NAME,
+        previous_interaction_id: interaction.id,
+        input: [
+          {
+            type: "function_result",
+            call_id: functionCallStep.id,
+            name: functionCallStep.name,
+            result: JSON.stringify(searchResults),
+          },
+        ],
+      });
+
+      return finalInteraction.output_text || "";
+    }
+
+    return interaction.output_text || "";
+  } catch (interactionError: any) {
+    console.warn(
+      "Interactions API fallback to generateContent:",
+      interactionError?.message || interactionError,
+    );
+
+    // Fallback to standard generateContent API
+    const contents: any[] =
+      chatHistory && chatHistory.length > 0
+        ? chatHistory.map((msg) => ({
+            role: msg.role === "assistant" ? "model" : "user",
+            parts: [{ text: msg.content }],
+          }))
+        : [{ role: "user", parts: [{ text: "Hello" }] }];
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.2,
+        tools: [
+          {
+            functionDeclarations: [
+              {
+                name: "search_linkedin",
+                description:
+                  "Searches the web for LinkedIn profiles. Use this for ANY internet search request.",
+                parameters: {
+                  type: "object" as any,
+                  properties: {
+                    search_query: {
+                      type: "string" as any,
+                      description:
+                        "The Google Dork query. Format: site:linkedin.com/in/ target location",
+                    },
+                  },
+                  required: ["search_query"],
+                },
+              },
+            ],
+          },
+        ],
       },
-    ],
-    tool_choice: "auto",
-  });
+    });
 
-  const responseMessage = completion.choices[0]?.message;
+    if (response.functionCalls && response.functionCalls.length > 0) {
+      const call = response.functionCalls[0];
+      if (call && call.name === "search_linkedin") {
+        const args = (call.args || {}) as { search_query?: string };
+        const searchResults = await searchLinkedInTavily(
+          args.search_query || "",
+        );
 
-  if (responseMessage?.tool_calls) {
-    messages.push(responseMessage);
-
-    for (const toolCall of responseMessage.tool_calls) {
-      if (toolCall.function.name === "search_linkedin") {
-        const args = JSON.parse(toolCall.function.arguments);
-        const searchResults = await searchLinkedInTavily(args.search_query);
-
-        messages.push({
-          tool_call_id: toolCall.id,
-          role: "tool",
-          name: "search_linkedin",
-          content: JSON.stringify(searchResults),
+        const followUp = await ai.models.generateContent({
+          model: MODEL_NAME,
+          contents: [
+            ...contents,
+            {
+              role: "model",
+              parts: [{ functionCall: call }],
+            },
+            {
+              role: "user",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "search_linkedin",
+                    response: { results: searchResults },
+                  },
+                },
+              ],
+            },
+          ] as any,
+          config: {
+            systemInstruction,
+            temperature: 0.2,
+          },
         });
+
+        return followUp.text || "";
       }
     }
 
-    const finalCompletion = await groq.chat.completions.create({
-      model: MODEL_NAME,
-      messages: messages,
-      temperature: 0.2,
-    });
-
-    return finalCompletion.choices[0]?.message?.content || "";
+    return response.text || "";
   }
-
-  return responseMessage?.content || "";
 }
 
 export default AgentX;
